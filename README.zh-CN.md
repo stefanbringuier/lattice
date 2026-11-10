@@ -86,6 +86,14 @@ Lattice 不自带模型，也没有自己的 AI 订阅。
 从 [最新版本](https://github.com/leo1oel/lattice/releases/latest) 下载 `.dmg`，把 Lattice 拖入“应用程序”，然后打开一个文件夹、从模板新建，或连接 Overleaf 项目。项目菜单里的 **新手教程** 会打开一篇示例论文。
 官方版本经过签名和 Apple 公证，并会自动更新。
 
+Linux 版支持 x86_64 和 ARM64，需要 glibc 2.39 或更高版本：Ubuntu 24.04 及以后、Linux Mint 22、Debian 13、当前的 Fedora、CentOS Stream 10，以及 Omarchy 等基于 Arch 的桌面。在终端运行下面这行即可为当前用户安装（无需 root），并加入应用菜单：
+
+```sh
+curl -fsSL https://github.com/leo1oel/lattice/releases/latest/download/install.sh | sh
+```
+
+也可以从 [最新版本](https://github.com/leo1oel/lattice/releases/latest) 下载适合你机器的 `.AppImage`，设为可执行后直接运行。两种方式都会自动更新；Lattice 会提出把 TinyTeX 安装到你的主文件夹，更新后依然保留。
+
 ## 致谢与许可
 
 致谢（包括 Inkeep 的 [Open Knowledge](https://github.com/inkeep/open-knowledge)，Lattice 早期可视化 Markdown 编辑器的起点）与许可条款（Apache-2.0，以及 tldraw 和 Trellis 各自的条款）以 [English README](README.md#acknowledgements) 为准。

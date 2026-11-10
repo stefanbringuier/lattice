@@ -1,9 +1,10 @@
 name: Release
 
 # Push a version tag (e.g. v0.1.38) to build, sign, and publish a GitHub
-# Release for Apple Silicon macOS and a Linux AppImage (ubuntu-24.04 glibc
-# floor). tauri-action also generates latest.json, which the in-app updater
-# reads to offer updates to installed copies.
+# Release for Apple Silicon macOS and for Linux, as an AppImage per
+# architecture. tauri-action also generates latest.json, which the in-app
+# updater reads to offer updates to installed copies; release-linux adds the
+# AppImages to it.
 on:
   push:
     tags:
@@ -85,12 +86,22 @@ jobs:
           Already running Lattice? It updates itself automatically — no need to
           re-download.
 
-          ## Install (Linux)
+          ## Install (Linux, x86_64 or ARM64)
 
-          Download the **.AppImage** below, mark it executable (`chmod +x`), and
-          run it. The AppImage is built on Ubuntu 24.04 so it runs on recent
-          glibc distros (24.04+, 26.04, Fedora, Arch/Omarchy-class). If FUSE is unavailable, run with
-          `APPIMAGE_EXTRACT_AND_RUN=1`.
+          Run this in a terminal. It installs Lattice for your user, with no
+          root, and adds it to your app menu:
+
+          ```sh
+          curl -fsSL https://github.com/leo1oel/lattice/releases/latest/download/install.sh | sh
+          ```
+
+          Or download the **.AppImage** for your machine below, make it
+          executable (`chmod +x`), and run it. Either way Lattice updates itself.
+
+          It runs on Ubuntu 24.04 and later, Linux Mint 22, Debian 13, current
+          Fedora, CentOS Stream 10, and Arch-based desktops such as Omarchy. It
+          needs glibc 2.39 or newer, so Debian 12, Mint 21, CentOS Stream 9 and
+          RHEL 9 are too old.
           EOF
 
           if [[ -n "$previous_tag" ]]; then
@@ -360,17 +371,21 @@ jobs:
           node scripts/normalize-updater-manifest.mjs "$manifest_dir/latest.json" "$manifest_dir/release.json"
           gh release upload "$GITHUB_REF_NAME" "$manifest_dir/latest.json" --clobber
 
-  # Linux AppImage on Ubuntu 24.04 (glibc floor for ~last-2-years + current
-  # Fedora/Arch). Do not build the shipping artifact on 26.04 — that only
-  # raises the floor. Smoke covers Ubuntu 24.04/26.04, Fedora, and Arch
-  # (Omarchy-class). Runs beside the macOS job; both leave the release a
-  # draft until publish-release verifies assets.
-  release-linux:
-    runs-on: ubuntu-24.04
+  # One AppImage per architecture, built on Ubuntu 24.04, whose glibc (2.39) is
+  # the oldest the image runs on. Do not move to a newer Ubuntu: that only
+  # raises the floor. Debian 12, Mint 21, CentOS Stream 9 and RHEL 9 sit below
+  # it. Each image is kept as a workflow artifact until every distro below has
+  # launched it; release-linux then publishes it.
+  build-linux:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: x86_64, runner: ubuntu-24.04 }
+          - { arch: aarch64, runner: ubuntu-24.04-arm }
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
 
       - uses: pnpm/action-setup@v6
         with:
@@ -390,28 +405,36 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
-          shared-key: x86_64-unknown-linux-gnu-release
+          shared-key: ${{ matrix.arch }}-unknown-linux-gnu-release
           save-if: false
 
-      - name: Install Tauri Linux dependencies
+      # Tauri's build dependencies, plus what scripts/appimage/ needs:
+      # squashfs-tools to repack the image, and the GStreamer plugins
+      # media-plugins.sh picks for WebKit's sound.
+      - name: Install the build dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             build-essential \
             curl \
             file \
+            gstreamer1.0-alsa \
+            gstreamer1.0-plugins-base \
+            gstreamer1.0-plugins-good \
+            gstreamer1.0-pulseaudio \
             libayatana-appindicator3-dev \
+            libdbus-1-dev \
             librsvg2-dev \
             libssl-dev \
             libwebkit2gtk-4.1-dev \
             libxdo-dev \
             patchelf \
             pkg-config \
+            squashfs-tools \
             wget \
+            xdg-utils \
             xz-utils \
-            zip \
-            libfuse2t64 \
-            xvfb
+            zip
 
       - run: pnpm install --frozen-lockfile
 
@@ -437,94 +460,219 @@ jobs:
       - name: Install pinned Synara dependencies
         run: bun install --cwd "$SYNARA_SOURCE_DIR" --frozen-lockfile
 
-      - name: Build Linux AppImage
-        uses: tauri-apps/tauri-action@v1
+      # As in the macOS job: the Linux app embeds the same interface fonts.
+      - name: Fetch the licensed interface fonts
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LATTICE_FONTS_DEPLOY_KEY: ${{ secrets.LATTICE_FONTS_DEPLOY_KEY }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "$LATTICE_FONTS_DEPLOY_KEY" ]]; then
+            echo "No fonts deploy key: building with the open-licensed interface fonts."
+            echo "LATTICE_PRIVATE_FONTS_DIR=" >> "$GITHUB_ENV"
+            exit 0
+          fi
+
+          ssh_dir="$(mktemp -d "$RUNNER_TEMP/lattice-fonts-ssh.XXXXXX")"
+          trap 'rm -rf "$ssh_dir"' EXIT
+          (umask 077 && printf '%s\n' "$LATTICE_FONTS_DEPLOY_KEY" > "$ssh_dir/deploy-key")
+          echo "github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl" \
+            > "$ssh_dir/known_hosts"
+
+          fonts_checkout="$RUNNER_TEMP/lattice-fonts"
+          GIT_SSH_COMMAND="ssh -i $ssh_dir/deploy-key -o IdentitiesOnly=yes -o HostKeyAlgorithms=ssh-ed25519 -o UserKnownHostsFile=$ssh_dir/known_hosts -o StrictHostKeyChecking=yes" \
+            git clone --quiet --depth=1 git@github.com:leo1oel/lattice-fonts.git "$fonts_checkout"
+
+          echo "LATTICE_PRIVATE_FONTS_DIR=$fonts_checkout/Timeless-Type-Family-1.094" >> "$GITHUB_ENV"
+          echo "LATTICE_PRIVATE_FONTS_REQUIRED=1" >> "$GITHUB_ENV"
+
+      # tauri.linux.conf.json turns off Tauri's updater signature: finish.sh
+      # rewrites the image after Tauri would sign it, so it is signed below.
+      - name: Build the AppImage
+        env:
           NODE_OPTIONS: --max-old-space-size=4096
           LATTICE_FIRECRAWL_KEY: ${{ secrets.LATTICE_FIRECRAWL_KEY }}
           VITE_TLDRAW_LICENSE_KEY: ${{ secrets.VITE_TLDRAW_LICENSE_KEY }}
-        with:
-          tagName: ${{ github.ref_name }}
-          releaseName: "Lattice ${{ github.ref_name }}"
-          releaseDraft: true
-          prerelease: false
-          uploadUpdaterJson: false
-          args: --bundles appimage
-
-      - name: Locate AppImage
-        id: appimage
+          # linuxdeploy is itself an AppImage; extracted, it needs no FUSE.
+          APPIMAGE_EXTRACT_AND_RUN: 1
         run: |
           set -euo pipefail
-          appimage="$(
-            find src-tauri/target -type f -name '*.AppImage' -print -quit
-          )"
-          test -n "$appimage"
-          echo "path=$appimage" >> "$GITHUB_OUTPUT"
-          cp "$appimage" "$RUNNER_TEMP/Lattice.AppImage"
+          GSTREAMER_PLUGINS_DIR="$(bash scripts/appimage/media-plugins.sh)"
+          export GSTREAMER_PLUGINS_DIR
+          # Only this build's image may be found below, never a cached one.
+          rm -rf src-tauri/target/release/bundle
+          pnpm tauri build --bundles appimage
+          built="$(find src-tauri/target/release/bundle/appimage -maxdepth 1 -name '*.AppImage' -print -quit)"
+          test -n "$built"
+          bash scripts/appimage/finish.sh "$built"
+          mkdir -p "$RUNNER_TEMP/linux"
+          mv "$built" "$RUNNER_TEMP/linux/Lattice-${{ matrix.arch }}.AppImage"
 
-      - name: Smoke-extract the AppImage
+      # As the macOS job checks its .app: the fonts may reach users only inside
+      # the binary's web assets.
+      - name: Check the built app for loose font files
         run: |
           set -euo pipefail
-          chmod +x "$RUNNER_TEMP/Lattice.AppImage"
-          workdir="$(mktemp -d)"
-          cp "$RUNNER_TEMP/Lattice.AppImage" "$workdir/app.AppImage"
-          (cd "$workdir" && ./app.AppImage --appimage-extract >/dev/null)
-          inner="$(find "$workdir/squashfs-root" -type f \( -name Lattice -o -name research-writer \) | head -n1)"
-          test -n "$inner"
-          if ldd "$inner" 2>&1 | grep -F 'not found'; then
-            echo "AppImage binary is missing shared libraries" >&2
-            ldd "$inner" || true
-            exit 1
-          fi
+          unpacked="$(mktemp -d "$RUNNER_TEMP/lattice-appimage.XXXXXX")"
+          (cd "$unpacked" && "$RUNNER_TEMP/linux/Lattice-${{ matrix.arch }}.AppImage" --appimage-extract >/dev/null)
+          node scripts/check-font-leaks.mjs app "$(find "$unpacked" -mindepth 1 -maxdepth 1 -type d -print -quit)"
+          rm -rf "$unpacked"
 
-      - name: Upload AppImage to the draft release
+      # The in-app updater checks this signature before it replaces the
+      # AppImage. A fork has no key: its AppImages ship, but no update reaches them.
+      - name: Sign the AppImage for the updater
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload "$GITHUB_REF_NAME" "$RUNNER_TEMP/Lattice.AppImage" --clobber
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          if [[ -z "$TAURI_SIGNING_PRIVATE_KEY" ]]; then
+            echo "No updater signing key: the AppImage stays out of the updater manifest."
+            exit 0
+          fi
+          pnpm tauri signer sign "$RUNNER_TEMP/linux/Lattice-${{ matrix.arch }}.AppImage"
 
-  # Guest smokes: same AppImage on Ubuntu 24.04/26.04, Fedora, and Arch
-  # (covers Omarchy and similar Arch-based desktops).
+      - uses: actions/upload-artifact@v7
+        with:
+          name: appimage-${{ matrix.arch }}
+          path: ${{ runner.temp }}/linux/
+          if-no-files-found: error
+          retention-days: 7
+
+  # Each AppImage launched in each distro through its AppRun, on its own
+  # architecture. Omarchy publishes no container image; it is Arch-based and
+  # runs Hyprland, so the Arch guests stand in for it, one on Wayland. CentOS
+  # Stream 10 has no X server, so it runs the Wayland test, and comes from
+  # quay.io because Docker Hub's centos image is no longer maintained. Mint and
+  # Arch publish x86_64 images only. Containers cannot cover GPU drivers, real
+  # compositors, keyrings or FUSE. Keep in step with .local/appimage-builder.
   appimage-smoke:
-    needs: release-linux
-    runs-on: ubuntu-latest
+    needs: build-linux
+    if: ${{ !cancelled() }}
     strategy:
       fail-fast: false
       matrix:
-        image: [ubuntu:24.04, ubuntu:26.04, fedora:41, archlinux:latest]
+        include:
+          - { arch: x86_64, image: "ubuntu:24.04", backend: x11 }
+          - { arch: x86_64, image: "ubuntu:26.04", backend: x11 }
+          - { arch: x86_64, image: "debian:13", backend: x11 }
+          - { arch: x86_64, image: "linuxmintd/mint22-amd64", backend: x11 }
+          - { arch: x86_64, image: "fedora:latest", backend: x11 }
+          - { arch: x86_64, image: "quay.io/centos/centos:stream10", backend: wayland }
+          - { arch: x86_64, image: "archlinux:latest", backend: x11 }
+          - { arch: x86_64, image: "archlinux:latest", backend: wayland }
+          - { arch: aarch64, image: "ubuntu:24.04", backend: x11 }
+          - { arch: aarch64, image: "debian:13", backend: x11 }
+          - { arch: aarch64, image: "fedora:latest", backend: x11 }
+          - { arch: aarch64, image: "quay.io/centos/centos:stream10", backend: wayland }
+    runs-on: ${{ matrix.arch == 'aarch64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
     steps:
       - uses: actions/checkout@v7
-      - name: Download AppImage from the draft release
+      - uses: actions/download-artifact@v8
+        with:
+          name: appimage-${{ matrix.arch }}
+          path: ${{ runner.temp }}/linux
+      - name: Launch on ${{ matrix.image }} (${{ matrix.arch }}, ${{ matrix.backend }})
+        run: |
+          docker run --rm --shm-size=512m \
+            -v "$RUNNER_TEMP/linux/Lattice-${{ matrix.arch }}.AppImage:/artifact.AppImage:ro" \
+            -v "$GITHUB_WORKSPACE/.github/scripts/smoke-appimage.sh:/smoke.sh:ro" \
+            "${{ matrix.image }}" \
+            bash /smoke.sh /artifact.AppImage "${{ matrix.backend }}"
+
+  # install.sh as a user runs it, against the layout release-linux publishes,
+  # then --uninstall. It is the same script on every architecture.
+  appimage-install:
+    needs: build-linux
+    if: ${{ !cancelled() }}
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ["ubuntu:26.04", "fedora:latest", "archlinux:latest"]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: appimage-x86_64
+          path: ${{ runner.temp }}/linux
+      - name: Install and uninstall on ${{ matrix.image }}
+        run: |
+          docker run --rm \
+            -v "$RUNNER_TEMP/linux/Lattice-x86_64.AppImage:/artifact.AppImage:ro" \
+            -v "$GITHUB_WORKSPACE/scripts/appimage/install.sh:/install.sh:ro" \
+            -v "$GITHUB_WORKSPACE/.github/scripts/test-install.sh:/test-install.sh:ro" \
+            "${{ matrix.image }}" \
+            bash /test-install.sh /artifact.AppImage /install.sh
+
+  # Publishes the AppImages to the draft once every distro launched and
+  # installed them. Runs after the macOS job so it finds the draft that job
+  # created with the release notes. `!cancelled()` still publishes them when the
+  # macOS job fails, as it does on a fork without the Apple secrets;
+  # publish-release then stays blocked and the release a draft.
+  release-linux:
+    needs: [release, appimage-smoke, appimage-install]
+    if: ${{ !cancelled() && needs.appimage-smoke.result == 'success' && needs.appimage-install.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: appimage-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/linux
+
+      - name: Upload the AppImages, their checksums and the installer
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          gh release download "$GITHUB_REF_NAME" --pattern '*.AppImage' --dir "$RUNNER_TEMP"
-          ls -la "$RUNNER_TEMP"/*.AppImage
-      - name: Smoke on ${{ matrix.image }}
+          cd "$RUNNER_TEMP/linux"
+          # install.sh checks each download against this list.
+          sha256sum Lattice-*.AppImage > SHA256SUMS
+          cp "$GITHUB_WORKSPACE/scripts/appimage/install.sh" .
+          if ! gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release create "$GITHUB_REF_NAME" --draft --title "Lattice $GITHUB_REF_NAME" \
+              --notes "The macOS job did not create this release, so it has the Linux build only."
+          fi
+          gh release upload "$GITHUB_REF_NAME" Lattice-*.AppImage* SHA256SUMS install.sh --clobber
+
+      # The macOS job's latest.json gains a linux-<arch> entry per signed
+      # AppImage, each pointed at its public download like the macOS one.
+      - name: Add the AppImages to the updater manifest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          appimage="$(ls -1 "$RUNNER_TEMP"/*.AppImage | head -n1)"
-          docker run --rm \
-            -v "$appimage:/artifact.AppImage:ro" \
-            -v "$GITHUB_WORKSPACE/.github/scripts/smoke-appimage.sh:/smoke.sh:ro" \
-            "${{ matrix.image }}" \
-            bash -lc '
-              set -euo pipefail
-              if command -v apt-get >/dev/null; then
-                apt-get update -qq
-                DEBIAN_FRONTEND=noninteractive apt-get install -y -qq file findutils >/dev/null
-                apt-get install -y -qq libfuse2t64 >/dev/null 2>&1 || apt-get install -y -qq libfuse2 >/dev/null
-              elif command -v dnf >/dev/null; then
-                dnf install -y -q fuse-libs file findutils which >/dev/null
-              elif command -v pacman >/dev/null; then
-                pacman -Sy --noconfirm fuse2 file findutils >/dev/null
-              fi
-              bash /smoke.sh /artifact.AppImage
-            '
+          cd "$RUNNER_TEMP/linux"
+          if ! compgen -G 'Lattice-*.AppImage.sig' >/dev/null; then
+            echo "The AppImages are not signed for the updater; latest.json is left as it is."
+            exit 0
+          fi
+          manifest_dir="$(mktemp -d "$RUNNER_TEMP/lattice-updater.XXXXXX")"
+          release_id="$(gh release view "$GITHUB_REF_NAME" --json databaseId --jq .databaseId)"
+          gh api "repos/$GITHUB_REPOSITORY/releases/$release_id" > "$manifest_dir/release.json"
+          if ! gh release download "$GITHUB_REF_NAME" --pattern latest.json --dir "$manifest_dir"; then
+            jq -n --arg version "${GITHUB_REF_NAME#v}" --arg date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+              '{version: $version, notes: "", pub_date: $date, platforms: {}}' > "$manifest_dir/latest.json"
+          fi
+          # normalize-updater-manifest.mjs resolves each draft download URL
+          # once, so it reads only the Linux entries, merged in afterwards.
+          jq '{version, platforms: {}}' "$manifest_dir/latest.json" > "$manifest_dir/linux.json"
+          for signature in Lattice-*.AppImage.sig; do
+            asset="${signature%.sig}"
+            arch="${asset#Lattice-}"
+            url="$(jq -r --arg name "$asset" '.assets[] | select(.name == $name) | .browser_download_url' "$manifest_dir/release.json")"
+            jq --arg platform "linux-${arch%.AppImage}" --arg url "$url" --arg signature "$(cat "$signature")" \
+              '.platforms[$platform] = {signature: $signature, url: $url}' "$manifest_dir/linux.json" > "$manifest_dir/next.json"
+            mv "$manifest_dir/next.json" "$manifest_dir/linux.json"
+          done
+          node "$GITHUB_WORKSPACE/scripts/normalize-updater-manifest.mjs" "$manifest_dir/linux.json" "$manifest_dir/release.json"
+          jq -s '.[0].platforms += .[1].platforms | .[0]' "$manifest_dir/latest.json" "$manifest_dir/linux.json" > "$manifest_dir/merged.json"
+          mv "$manifest_dir/merged.json" "$manifest_dir/latest.json"
+          gh release upload "$GITHUB_REF_NAME" "$manifest_dir/latest.json" --clobber
 
   publish-release:
-    needs: [release, release-linux, appimage-smoke]
+    needs: [release, release-linux]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

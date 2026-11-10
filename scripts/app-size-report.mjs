@@ -177,7 +177,10 @@ const EAGER_JS_BUDGET_BYTES = Math.floor(1.355 * 1024 * 1024);
 const PERF_LAB_EAGER_JS_ALLOWANCE_BYTES = 2 * 1024;
 const ROLLDOWN_RUNTIME_BUDGET_BYTES = 4 * 1024;
 const CLAUDE_PATH_LAUNCHER_BUDGET_BYTES = 4 * 1024;
-const PRESENTATION_RUNTIME_BUDGET_BYTES = 66 * 1024 * 1024;
+// The Open Slide runtime's native packages (rolldown's and lightningcss's
+// bindings) are larger built for Linux than for macOS, so the AppImage's
+// runtime has a budget of its own.
+const PRESENTATION_RUNTIME_BUDGET_BYTES = (process.platform === "linux" ? 84 : 66) * 1024 * 1024;
 
 export async function checkAppSizeBudgets(
   workspace = process.cwd(),

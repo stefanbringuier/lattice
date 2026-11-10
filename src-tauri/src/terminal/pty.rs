@@ -20,7 +20,7 @@ pub(super) struct Shell {
 }
 
 /// The writer's login shell, as a terminal app runs it: from the account
-/// record, else `$SHELL`, else zsh (macOS's default).
+/// record, else `$SHELL`, else the system default (zsh on macOS).
 pub(crate) fn login_shell() -> PathBuf {
     let usable = |path: &Path| path.is_absolute() && path.is_file();
     // SAFETY: getpwuid_r writes only into `record` and `buffer`, both sized
@@ -42,7 +42,9 @@ pub(crate) fn login_shell() -> PathBuf {
     from_account
         .filter(|path| usable(path))
         .or_else(|| std::env::var_os("SHELL").map(PathBuf::from).filter(|path| usable(path)))
-        .unwrap_or_else(|| PathBuf::from("/bin/zsh"))
+        .unwrap_or_else(|| {
+            PathBuf::from(if cfg!(target_os = "macos") { "/bin/zsh" } else { "/bin/sh" })
+        })
 }
 
 /// The search path the shell starts from: Lattice's own, then the TeX
@@ -74,13 +76,15 @@ fn open(cols: u16, rows: u16) -> io::Result<(OwnedFd, OwnedFd)> {
     let mut slave: RawFd = -1;
     let mut size = libc::winsize { ws_row: rows, ws_col: cols, ws_xpixel: 0, ws_ypixel: 0 };
     // SAFETY: openpty writes two descriptors, which are owned from here on.
+    // A raw pointer for the size, which macOS declares `*mut` and glibc
+    // `*const`.
     let status = unsafe {
         libc::openpty(
             &mut master,
             &mut slave,
             std::ptr::null_mut(),
             std::ptr::null_mut(),
-            &mut size,
+            &raw mut size,
         )
     };
     if status < 0 {
@@ -113,6 +117,14 @@ pub(super) fn spawn_shell(shell: &Path, cwd: &Path, cols: u16, rows: u16) -> io:
     let name =
         shell.file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_default();
     let mut command = Command::new(shell);
+    if let Some(appdir) = std::env::var_os("APPDIR").filter(|appdir| !appdir.is_empty()) {
+        for (name, value) in appimage_overrides(Path::new(&appdir), std::env::vars_os()) {
+            match value {
+                Some(value) => command.env(name, value),
+                None => command.env_remove(name),
+            };
+        }
+    }
     // `-l`, as every terminal app starts it: the login profile sets the
     // writer's own PATH (Homebrew, TeX, pyenv), which a GUI launch lacks.
     command
@@ -130,8 +142,9 @@ pub(super) fn spawn_shell(shell: &Path, cwd: &Path, cols: u16, rows: u16) -> io:
         .env_remove("LATTICE_PROJECT");
     // A Finder launch has no locale; without one zsh and vim treat CJK text
     // as single bytes. LC_CTYPE alone leaves messages in the writer's language.
+    // glibc names the locale every system has C.UTF-8.
     if ["LC_ALL", "LC_CTYPE", "LANG"].iter().all(|name| std::env::var_os(name).is_none()) {
-        command.env("LC_CTYPE", "UTF-8");
+        command.env("LC_CTYPE", if cfg!(target_os = "macos") { "UTF-8" } else { "C.UTF-8" });
     }
     // SAFETY: only async-signal-safe calls between fork and exec.
     unsafe {
@@ -163,6 +176,37 @@ pub(super) fn spawn_shell(shell: &Path, cwd: &Path, cols: u16, rows: u16) -> io:
     // once the shell and everything it started have closed it.
     drop(slave);
     Ok(Shell { master, child, name })
+}
+
+/// What the shell must not inherit from an AppImage mounted at `appdir`: the
+/// variables its start scripts point into the image for Lattice's own GTK,
+/// GLib and GStreamer, which a desktop app started from the terminal would
+/// load, built for another GTK, and fail to start with. Each is removed
+/// (`None`), or keeps only its paths outside the image. So are the runtime's
+/// own variables, since an Electron app's updater takes `APPIMAGE` for its
+/// own file, and the GStreamer registry the Lattice hook gives the image.
+fn appimage_overrides(
+    appdir: &Path, variables: impl IntoIterator<Item = (OsString, OsString)>,
+) -> Vec<(OsString, Option<OsString>)> {
+    const IMAGE_ONLY: [&str; 5] = ["APPIMAGE", "APPDIR", "ARGV0", "OWD", "GST_REGISTRY_1_0"];
+    let mut overrides = Vec::new();
+    for (name, value) in variables {
+        if IMAGE_ONLY.iter().any(|image_only| name == *image_only) {
+            overrides.push((name, None));
+            continue;
+        }
+        let paths: Vec<PathBuf> = std::env::split_paths(&value).collect();
+        if !paths.iter().any(|path| path.starts_with(appdir)) {
+            continue;
+        }
+        let outside: Vec<PathBuf> = paths
+            .into_iter()
+            .filter(|path| !path.as_os_str().is_empty() && !path.starts_with(appdir))
+            .collect();
+        let kept = if outside.is_empty() { None } else { std::env::join_paths(outside).ok() };
+        overrides.push((name, kept));
+    }
+    overrides
 }
 
 /// A size a page asked for, held to what a screen can show.
@@ -206,11 +250,6 @@ pub(super) fn process_name(pid: i32) -> Option<String> {
         let name = String::from_utf8_lossy(&name).trim().to_owned();
         (!name.is_empty()).then_some(name)
     }
-    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
-    {
-        let _ = pid;
-        None
-    }
 }
 
 /// Send `signal` to process group `group`. Lattice's own group is never one
@@ -228,4 +267,39 @@ pub(super) fn signal_group(group: i32, signal: libc::c_int) {
 pub(super) fn group_alive(group: i32) -> bool {
     // SAFETY: signal 0 only checks that the group exists.
     group > 1 && unsafe { libc::kill(-group, 0) } == 0
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_shell_gets_the_desktop_environment_not_the_appimage_one() {
+        let variable = |name: &str, value: &str| (OsString::from(name), OsString::from(value));
+        let overrides = appimage_overrides(
+            Path::new("/tmp/.mount_x"),
+            [
+                variable("GTK_PATH", "/tmp/.mount_x//usr/lib/gtk-3.0"),
+                variable("XDG_DATA_DIRS", "/tmp/.mount_x/usr/share:/usr/share:/usr/local/share"),
+                variable("LD_LIBRARY_PATH", "/tmp/.mount_x/usr/lib/fallback"),
+                variable("APPIMAGE", "/home/writer/Lattice.AppImage"),
+                variable("GST_REGISTRY_1_0", "/home/writer/.cache/lattice/registry.bin"),
+                variable("GTK_THEME", "Adwaita:dark"),
+                variable("HOME", "/home/writer"),
+                variable("OTHER", "/tmp/.mount_x2/usr/bin"),
+            ],
+        );
+        let removed = |name: &str| (OsString::from(name), None::<OsString>);
+        let kept = |name: &str, value: &str| (OsString::from(name), Some(OsString::from(value)));
+        assert_eq!(
+            overrides,
+            vec![
+                removed("GTK_PATH"),
+                kept("XDG_DATA_DIRS", "/usr/share:/usr/local/share"),
+                removed("LD_LIBRARY_PATH"),
+                removed("APPIMAGE"),
+                removed("GST_REGISTRY_1_0"),
+            ]
+        );
+    }
 }

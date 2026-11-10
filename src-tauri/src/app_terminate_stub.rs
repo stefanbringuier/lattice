@@ -1,4 +1,6 @@
-//! AppKit terminate: is macOS-only; Linux uses the normal window close path.
+//! AppKit's `terminate:` (Dock ▸ Quit, logging out) exists only on macOS.
+//! Elsewhere Lattice quits through its windows closing, which
+//! `save_before_close` already holds until each page has saved.
 
 use tauri::{AppHandle, Runtime};
 

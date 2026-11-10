@@ -57,6 +57,7 @@ mod pdf_pages;
 #[cfg(feature = "perf-lab")]
 mod perf_lab;
 mod presentation;
+#[cfg(target_os = "macos")]
 mod process_inspector;
 mod project;
 mod project_fs;
@@ -297,6 +298,7 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 
 /// Dock click with no window showing: bring back whichever surface this
 /// launch uses — the browser entry or the desktop window.
+#[cfg(target_os = "macos")]
 fn reopen(app: &AppHandle) {
     let browser = app.state::<browser_host::BrowserHost>();
     match browser.reopen_entry(app) {
@@ -348,8 +350,10 @@ pub fn run() {
     // The process inspector is a bare helper with no identity of its own, so it
     // runs even from a binary whose flavor and config disagree (`cargo test`
     // with LATTICE_FLAVOR=beta builds one).
+    #[cfg(target_os = "macos")]
     process_inspector::run_if_requested();
     app_identity::init(&context.config().identifier);
+    commands::init_resource_dir(context.package_info());
     http::install_tls_provider();
     if agent_literature::run_cli() || research_env::run_cli() {
         return;

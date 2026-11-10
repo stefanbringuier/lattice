@@ -1,30 +1,32 @@
 //! One-click TeX and required-tool install helpers.
 //!
-//! A full install downloads the pinned BasicTeX package, runs one privileged
-//! script for it and the TeX Live packages Lattice needs, installs the
-//! app-managed uv, and then verifies everything as the signed-in user. The
-//! tools-only mode keeps a working TeX and installs just uv. A dependency
-//! install finds the one TeX Live package that provides a missing file.
+//! A full install puts a pinned TeX Live distribution in place (BasicTeX on
+//! macOS, installed as root behind the administrator prompt; TinyTeX on
+//! Linux, unpacked into the home folder), runs one script for the TeX Live
+//! packages Lattice needs, installs the app-managed uv, and then verifies
+//! everything as the signed-in user. The tools-only mode keeps a working TeX
+//! and installs just uv. A dependency install finds the one TeX Live package
+//! that provides a missing file.
 //!
-//! `installer` holds the pins, scripts and output parsers; `macos` runs them
-//! on macOS. Other platforms expose the same commands but refuse one-click
-//! install until a Linux path exists. Downloads stay in `fetch`.
+//! `installer` holds the pins, scripts and output parsers; `common` what both
+//! platforms do alike; `macos` and `linux` the rest. Downloads stay in `fetch`.
 
 use serde::{Deserialize, Serialize};
 
+mod common;
 mod fetch;
 mod installer;
+#[cfg(not(target_os = "macos"))]
+mod linux;
 #[cfg(target_os = "macos")]
 mod macos;
-#[cfg(not(target_os = "macos"))]
-mod stub;
 
 pub(crate) use fetch::download as download_pinned;
 pub(crate) use installer::{create_private_file, PinnedDownload};
+#[cfg(not(target_os = "macos"))]
+pub use linux::{install_dependency, install_tex};
 #[cfg(target_os = "macos")]
 pub use macos::{install_dependency, install_tex};
-#[cfg(not(target_os = "macos"))]
-pub use stub::{install_dependency, install_tex};
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]

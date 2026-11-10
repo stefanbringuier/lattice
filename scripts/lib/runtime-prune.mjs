@@ -41,11 +41,12 @@ const NATIVE_CANDIDATE = /(?:^[^.]+$|\.(?:node|so|dylib|dll|exe)$|\.so\.\d+(?:\.
 
 const MACH_O_CPU_ARM64 = 0x0100000c;
 const MACH_O_CPU_X86_64 = 0x01000007;
+const ELF_MACHINE = { "linux-x64": 62, "linux-arm64": 183 };
 
 function readHeader(path) {
   const descriptor = openSync(path, "r");
   try {
-    const header = Buffer.alloc(8);
+    const header = Buffer.alloc(20);
     const length = readSync(descriptor, header, 0, header.length, 0);
     return header.subarray(0, length);
   } finally {
@@ -53,19 +54,30 @@ function readHeader(path) {
   }
 }
 
+// The bundled Node is a glibc build, so it can never dlopen a musl addon, and
+// linuxdeploy aborts the AppImage when ldd meets one. Some packages ship both
+// libcs side by side. Prebuilds name the libc in the file, and an addon may link
+// a bare libc.so instead of libc.musl-*, so the name is checked as well.
+function isForeignElf(path, header, platform) {
+  if (!platform.startsWith("linux-")) return true;
+  if (header.length === 20 && header.readUInt16LE(18) !== ELF_MACHINE[platform]) return true;
+  return /[-.]musl[-.]/i.test(basename(path)) || readFileSync(path).includes("libc.musl-");
+}
+
 /**
- * True for a binary macOS on `platform` can never load: an ELF or PE file, or
+ * True for a binary `platform` can never load. On macOS: an ELF or PE file, or
  * a thin Mach-O Node addon for the other CPU (an arm64 Node cannot dlopen an
  * x86_64 addon). A thin x86_64 executable could still run under Rosetta, and
- * universal binaries cover both CPUs, so neither is foreign.
+ * universal binaries cover both CPUs, so neither is foreign. On Linux: a PE or
+ * Mach-O addon, or an ELF file for another CPU or for musl.
  */
 export function isForeignBinary(path, platform) {
   if (!NATIVE_CANDIDATE.test(basename(path))) return false;
   const header = readHeader(path);
   if (header.length < 4) return false;
-  if (header.subarray(0, 4).equals(Buffer.from([0x7f, 0x45, 0x4c, 0x46]))) return !platform.startsWith("linux-");
+  if (header.subarray(0, 4).equals(Buffer.from([0x7f, 0x45, 0x4c, 0x46]))) return isForeignElf(path, header, platform);
   if (header[0] === 0x4d && header[1] === 0x5a && /\.(?:node|dll|exe)$/i.test(path)) return !platform.startsWith("win32-");
-  if (header.length === 8 && header.readUInt32LE(0) === 0xfeedfacf && path.endsWith(".node")) {
+  if (header.length >= 8 && header.readUInt32LE(0) === 0xfeedfacf && path.endsWith(".node")) {
     const cpu = header.readUInt32LE(4);
     if (platform === "darwin-arm64") return cpu !== MACH_O_CPU_ARM64;
     if (platform === "darwin-x64") return cpu !== MACH_O_CPU_X86_64;
@@ -173,6 +185,16 @@ export function pruneNodeModules(nodeModules, { platform, typeScriptSources }) {
   if (typeScriptSources !== "keep" && typeScriptSources !== "remove") {
     throw new Error(`typeScriptSources must be "keep" or "remove", not ${typeScriptSources}`);
   }
+  let removedBytes = 0;
+  // A musl-only package names its .node file as its entry point, which would
+  // protect that file below. Nothing on a glibc build resolves such a package.
+  if (platform.startsWith("linux-")) {
+    for (const directory of packageDirectories(nodeModules)) {
+      if (existsSync(directory) && readJson(join(directory, "package.json")).libc?.includes("musl")) {
+        removedBytes += removePath(directory);
+      }
+    }
+  }
   const packages = packageDirectories(nodeModules);
   const entries = new Set();
   for (const directory of packages) for (const file of protectedEntryFiles(directory)) entries.add(file);
@@ -183,7 +205,6 @@ export function pruneNodeModules(nodeModules, { platform, typeScriptSources }) {
     }
   }
   const protects = (path) => entries.has(path) || entryDirectories.has(path);
-  let removedBytes = 0;
 
   // Tauri's resource walker copies a link's target, so every npm .bin link
   // ships as a second full copy of the executable it names. Nothing in a

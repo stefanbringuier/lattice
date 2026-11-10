@@ -205,9 +205,15 @@ mod tests {
                 reports.recv_timeout(deadline.saturating_duration_since(Instant::now()))
             {
                 assert_eq!(report["root"], root.to_string_lossy().as_ref());
-                // No paths (FSEvents asked for a rescan) covers every one.
+                // No paths (FSEvents asked for a rescan) covers every one, and
+                // a folder covers what is in it: the index and the tree read
+                // it whole. FSEvents names each copied file; inotify names the
+                // new folder, since its files land before a watch on it exists.
                 let Some(names) = report["paths"].as_array() else { return true };
-                if names.iter().any(|name| name == path) {
+                let covers = |name: &serde_json::Value| {
+                    name.as_str().is_some_and(|name| Path::new(path).starts_with(name))
+                };
+                if names.iter().any(covers) {
                     return true;
                 }
             }

@@ -1,8 +1,9 @@
 #!/bin/bash
-# The shared start of every privileged installer script. ROOT is a fresh
-# folder this script creates and removes; the app polls STATUS for progress,
-# and on failure the failed step plus the telling lines of LOG go to the
-# original stderr, which the app shows.
+# The shared start of every installer script, which runs as root behind the
+# administrator prompt on macOS and as the signed-in user on Linux. ROOT is a
+# fresh folder this script creates and removes; the app polls STATUS for
+# progress, and on failure the failed step plus the telling lines of LOG go
+# to the original stderr, which the app shows.
 set -euo pipefail
 ROOT=__ROOT_PATH__
 STATUS="${ROOT}/status"
@@ -11,7 +12,7 @@ CURRENT_STEP="Preparing the __INSTALLER_NAME__ installation"
 
 umask 077
 if ! /bin/mkdir -m 711 "${ROOT}"; then
-  echo "Could not create the privileged __INSTALLER_NAME__ installer folder." >&2
+  echo "Could not create the __INSTALLER_NAME__ installer folder." >&2
   exit 1
 fi
 : > "${STATUS}"

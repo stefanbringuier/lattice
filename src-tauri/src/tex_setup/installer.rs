@@ -18,6 +18,23 @@ pub(crate) struct PinnedDownload {
     pub artifact: &'static str,
 }
 
+// How messages name this system, and the TeX distribution Lattice installs
+// on it: BasicTeX on macOS, behind the administrator prompt, and TinyTeX on
+// Linux, in the home folder. Both are TeX Live underneath, so the required
+// packages (tex-packages.sh), tlmgr and the checks are shared.
+#[cfg(target_os = "macos")]
+pub(super) const SYSTEM: &str = "macOS";
+#[cfg(target_os = "macos")]
+pub(super) const TEX_DISTRIBUTION: &str = "BasicTeX";
+#[cfg(not(target_os = "macos"))]
+pub(super) const SYSTEM: &str = "Linux";
+#[cfg(not(target_os = "macos"))]
+pub(super) const TEX_DISTRIBUTION: &str = "TinyTeX";
+
+// The installers for both platforms build everywhere, so every CI runs
+// their tests; each runs only on its own platform.
+
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub(super) const BASIC_TEX: PinnedDownload = PinnedDownload {
     url: "https://mirror.ctan.org/systems/mac/mactex/mactex-basictex-20260301.pkg",
     sha256: "19164fbfef08c30fd433f59203c8804abbbd685d3a344ef7f0ba8c1fd4157cb3",
@@ -26,7 +43,44 @@ pub(super) const BASIC_TEX: PinnedDownload = PinnedDownload {
     source: "BasicTeX",
     artifact: "BasicTeX package",
 };
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub(super) const BASIC_TEX_YEAR: i32 = 2026;
+
+/// What the TinyTeX downloads share; each processor's below adds its own.
+/// TinyTeX-1 is TeX Live's infrastructure and about 90 common LaTeX packages,
+/// in one `.TinyTeX` folder.
+const TINY_TEX: PinnedDownload = PinnedDownload {
+    url: "",
+    sha256: "",
+    timeout: Duration::from_secs(30 * 60),
+    name: "TinyTeX",
+    source: "TinyTeX",
+    artifact: "TinyTeX archive",
+};
+const TINY_TEX_X86_64: PinnedDownload = PinnedDownload {
+    url: "https://github.com/rstudio/tinytex-releases/releases/download/v2026.11/TinyTeX-1-linux-x86_64-v2026.11.tar.xz",
+    sha256: "5b75befa848deae702ae6fa12ff0eef3f110d7e4e2a979ae99f101eba3c9c70d",
+    ..TINY_TEX
+};
+const TINY_TEX_ARM64: PinnedDownload = PinnedDownload {
+    url: "https://github.com/rstudio/tinytex-releases/releases/download/v2026.11/TinyTeX-1-linux-arm64-v2026.11.tar.xz",
+    sha256: "b351c365e4085a179c8d76fddadff612d4e4fd16a946953fb8b9d331f4f7344a",
+    ..TINY_TEX
+};
+/// The TeX Live release TinyTeX v2026.11 is built from.
+#[cfg_attr(target_os = "macos", allow(dead_code))]
+pub(super) const TINY_TEX_YEAR: i32 = 2026;
+
+/// The pinned TinyTeX for this processor, for the processors the Linux
+/// AppImage is built for.
+#[cfg_attr(target_os = "macos", allow(dead_code))]
+pub(super) fn tiny_tex_release() -> Option<&'static PinnedDownload> {
+    match std::env::consts::ARCH {
+        "x86_64" => Some(&TINY_TEX_X86_64),
+        "aarch64" => Some(&TINY_TEX_ARM64),
+        _ => None,
+    }
+}
 
 /// Tools (and the argument that proves each runs) that an existing TeX
 /// installation must provide before only the required tools are installed.
@@ -35,30 +89,71 @@ pub(super) const REUSABLE_TEX_TOOLS: [(&str, &str); 3] =
 /// At least one of these engines must run.
 pub(super) const REUSABLE_TEX_ENGINES: [&str; 3] = ["pdflatex", "xelatex", "lualatex"];
 
-const BASIC_SCRIPT: &str =
-    concat!(include_str!("installer-prelude.sh"), "\n", include_str!("basictex.sh"));
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+const BASIC_SCRIPT: &str = concat!(
+    include_str!("installer-prelude.sh"),
+    "\n",
+    include_str!("basictex.sh"),
+    "\n",
+    include_str!("tex-packages.sh")
+);
+#[cfg_attr(target_os = "macos", allow(dead_code))]
+const TINY_SCRIPT: &str = concat!(
+    include_str!("installer-prelude.sh"),
+    "\n",
+    include_str!("tinytex.sh"),
+    "\n",
+    include_str!("tex-packages.sh")
+);
 const DEPENDENCY_SCRIPT: &str =
     concat!(include_str!("installer-prelude.sh"), "\n", include_str!("dependency.sh"));
 
-/// The managed uv release for Apple Silicon, the only Macs Lattice runs on.
-pub(super) const UV: PinnedDownload = PinnedDownload {
-    url: "https://github.com/astral-sh/uv/releases/download/0.12.3/uv-aarch64-apple-darwin.tar.gz",
-    sha256: "546f7f8a6c70ff13a3a9d2bc958db3427298cebf3e0cb756f9177133b7068843",
+/// What the managed uv downloads share; each platform's below adds its own.
+const UV: PinnedDownload = PinnedDownload {
+    url: "",
+    sha256: "",
     timeout: Duration::from_secs(10 * 60),
     name: "uv",
     source: "the required uv tool",
     artifact: "uv archive",
 };
-/// The directory the uv archive unpacks into.
-pub(super) const UV_ARCHIVE_ROOT: &str = "uv-aarch64-apple-darwin";
+const UV_MACOS_ARM64: PinnedDownload = PinnedDownload {
+    url: "https://github.com/astral-sh/uv/releases/download/0.12.3/uv-aarch64-apple-darwin.tar.gz",
+    sha256: "546f7f8a6c70ff13a3a9d2bc958db3427298cebf3e0cb756f9177133b7068843",
+    ..UV
+};
+const UV_LINUX_X86_64: PinnedDownload = PinnedDownload {
+    url: "https://github.com/astral-sh/uv/releases/download/0.12.3/uv-x86_64-unknown-linux-gnu.tar.gz",
+    sha256: "600cf9a742aca00d292673b16b5acffaa7b8c269a364ad0c2e79498dcb1fe101",
+    ..UV
+};
+const UV_LINUX_ARM64: PinnedDownload = PinnedDownload {
+    url: "https://github.com/astral-sh/uv/releases/download/0.12.3/uv-aarch64-unknown-linux-gnu.tar.gz",
+    sha256: "bb66cb52e7b1823aed1183630d8d8e5c958840d584a4c55ec10a4cfc168dcca2",
+    ..UV
+};
+
+/// The pinned uv for this machine, and the directory its archive unpacks
+/// into, on the platforms Lattice ships on: Apple Silicon Macs, and x86-64
+/// and ARM64 Linux.
+pub(super) fn uv_release() -> Option<(&'static PinnedDownload, &'static str)> {
+    match (std::env::consts::OS, std::env::consts::ARCH) {
+        ("macos", "aarch64") => Some((&UV_MACOS_ARM64, "uv-aarch64-apple-darwin")),
+        ("linux", "x86_64") => Some((&UV_LINUX_X86_64, "uv-x86_64-unknown-linux-gnu")),
+        ("linux", "aarch64") => Some((&UV_LINUX_ARM64, "uv-aarch64-unknown-linux-gnu")),
+        _ => None,
+    }
+}
 
 /// `/bin/bash -c <script>` for `do shell script … with administrator privileges`.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub(super) fn privileged_command(script: &str) -> String {
     format!("/bin/bash -c {}", shell_quote(script))
 }
 
 /// The BasicTeX installer script: copies and re-verifies the downloaded
 /// `package` when `install_base`, then installs the required packages.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub(super) fn basic_tex_script(package: &Path, root: &Path, install_base: bool) -> String {
     BASIC_SCRIPT
         .replace("__INSTALLER_NAME__", "BasicTeX")
@@ -66,6 +161,16 @@ pub(super) fn basic_tex_script(package: &Path, root: &Path, install_base: bool) 
         .replace("__ROOT_PATH__", &shell_quote(&root.to_string_lossy()))
         .replace("__EXPECTED_SHA256__", BASIC_TEX.sha256)
         .replace("__INSTALL_BASE__", if install_base { "1" } else { "0" })
+}
+
+/// The script that adds the required packages to the TinyTeX whose programs
+/// are in `texbin`, run as the signed-in user.
+#[cfg_attr(target_os = "macos", allow(dead_code))]
+pub(super) fn tiny_tex_script(texbin: &Path, root: &Path) -> String {
+    TINY_SCRIPT
+        .replace("__INSTALLER_NAME__", "TinyTeX")
+        .replace("__ROOT_PATH__", &shell_quote(&root.to_string_lossy()))
+        .replace("__TEXBIN__", &shell_quote(&texbin.to_string_lossy()))
 }
 
 /// The script that installs one TeX Live `package`, from `repository` when
@@ -133,15 +238,15 @@ pub(super) fn install_error(stderr: &str) -> String {
     }
     let detail = install_error_detail(stderr);
     if detail.is_empty() {
-        "BasicTeX installation failed. Please try again.".into()
+        format!("{TEX_DISTRIBUTION} installation failed. Please try again.")
     } else if detail.starts_with("Updating the TeX Live package manager failed.")
         || detail.starts_with("Installing the required LaTeX packages failed.")
     {
         format!(
-            "BasicTeX is installed, but Lattice could not finish installing the required LaTeX packages.\n{detail}"
+            "{TEX_DISTRIBUTION} is installed, but Lattice could not finish installing the required LaTeX packages.\n{detail}"
         )
     } else {
-        format!("BasicTeX installation failed.\n{detail}")
+        format!("{TEX_DISTRIBUTION} installation failed.\n{detail}")
     }
 }
 
@@ -367,11 +472,39 @@ mod tests {
     }
 
     #[test]
+    fn tiny_tex_installer_is_pinned_and_runs_as_the_user() {
+        for download in [&TINY_TEX_X86_64, &TINY_TEX_ARM64] {
+            assert_pinned(
+                download,
+                "https://github.com/rstudio/tinytex-releases/releases/download/v2026.11/",
+            );
+            assert!(download.url.ends_with(".tar.xz"), "{}", download.url);
+        }
+        assert_eq!(TINY_TEX_YEAR, 2026);
+        // The same required packages as BasicTeX, and what TinyTeX lacks.
+        for expected in [
+            "status installing-packages",
+            "relay_progress installing-packages",
+            "  psnfss \\\n",
+            "DISTRIBUTION_PACKAGES=\"synctex xetex fandol\"",
+            "tlmgr_with_fallback update --self",
+        ] {
+            assert!(TINY_SCRIPT.contains(expected), "{expected}");
+        }
+        for unexpected in ["sudo", "/usr/sbin/installer", "osascript", "shasum"] {
+            assert!(!TINY_SCRIPT.contains(unexpected), "{unexpected}");
+        }
+        let position = |text: &str| TINY_SCRIPT.find(text).unwrap();
+        assert!(position("umask 022") < position("tlmgr_with_fallback update --self"));
+    }
+
+    #[test]
     fn installer_scripts_are_fully_filled_in() {
         let root = Path::new("/private/var/tmp/lattice-root");
         let scripts = [
             basic_tex_script(Path::new("/tmp/Ada's/BasicTeX.pkg"), root, true),
             dependency_script(root, Path::new("/Library/TeX/texbin/tlmgr"), "newtx", None),
+            tiny_tex_script(Path::new("/home/ada/.TinyTeX/bin/x86_64-linux"), root),
         ];
         for script in &scripts {
             assert!(!script.contains("__"), "unfilled placeholder in:\n{script}");
@@ -380,10 +513,14 @@ mod tests {
         // Paths are single-quoted, embedded quotes included.
         assert!(scripts[0].contains("SOURCE_PACKAGE='/tmp/Ada'\"'\"'s/BasicTeX.pkg'\n"));
         assert!(scripts[0].contains(&format!("EXPECTED_SHA256={}\n", BASIC_TEX.sha256)));
-        assert!(scripts[0].contains("privileged BasicTeX installer folder."));
+        assert!(scripts[0].contains("Could not create the BasicTeX installer folder."));
+        assert!(scripts[0].contains("DISTRIBUTION_PACKAGES=\"\"\n"));
         assert!(scripts[1].contains("TEX_REPOSITORY=''\n"));
         assert!(scripts[1].contains("CURRENT_STEP=\"Preparing the LaTeX package installation\""));
+        assert!(scripts[2].contains("TEXBIN='/home/ada/.TinyTeX/bin/x86_64-linux'\n"));
+        assert!(scripts[2].contains("CURRENT_STEP=\"Preparing the TinyTeX installation\""));
         assert!(BASIC_SCRIPT.starts_with("#!/bin/bash\n"));
+        assert!(TINY_SCRIPT.starts_with("#!/bin/bash\n"));
         for expected in [
             "status installing-dependency",
             "tlmgr_with_fallback update --self",
@@ -397,10 +534,15 @@ mod tests {
     }
 
     #[test]
-    fn uv_downloads_are_versioned_and_pinned_for_supported_macs() {
+    fn uv_downloads_are_versioned_and_pinned_for_each_platform() {
         assert_eq!(crate::commands::MANAGED_UV_VERSION, "0.12.3");
-        assert_pinned(&UV, "https://github.com/astral-sh/uv/releases/download/0.12.3/");
-        assert!(UV.url.ends_with(&format!("/{UV_ARCHIVE_ROOT}.tar.gz")));
+        for download in [&UV_MACOS_ARM64, &UV_LINUX_X86_64, &UV_LINUX_ARM64] {
+            assert_pinned(download, "https://github.com/astral-sh/uv/releases/download/0.12.3/");
+        }
+        // An Intel Mac, which Lattice does not run on, has none.
+        if let Some((download, archive_root)) = uv_release() {
+            assert!(download.url.ends_with(&format!("/{archive_root}.tar.gz")));
+        }
         assert_eq!(REUSABLE_TEX_TOOLS.map(|(tool, _)| tool), ["latexmk", "synctex", "bibtex"]);
         assert_eq!(REUSABLE_TEX_ENGINES, ["pdflatex", "xelatex", "lualatex"]);
     }
@@ -463,23 +605,31 @@ mod tests {
 
     #[test]
     fn installer_errors_keep_the_useful_detail_without_applescript_noise() {
+        let installed = format!("{TEX_DISTRIBUTION} is installed");
         let error = install_error(
             "7:75: execution error: Installing the required LaTeX packages failed.\n\
              tlmgr: package example not present in repository. (1)\n",
         );
-        assert!(error.starts_with("BasicTeX is installed"));
+        assert!(error.starts_with(&installed), "{error}");
         assert!(error.contains("package example not present in repository"));
         assert!(!error.contains("execution error"));
         assert!(!error.ends_with("(1)"));
 
-        // A repository failure does not claim BasicTeX itself failed.
+        // A repository failure does not claim the distribution itself failed.
         let error = install_error(
             "7:75: execution error: Updating the TeX Live package manager failed.\n\
              /Library/TeX/texbin/tlmgr: TLPDB::from_file could not get texlive.tlpdb. (1)\n",
         );
-        assert!(error.starts_with("BasicTeX is installed"));
-        assert!(!error.starts_with("BasicTeX installation failed"));
+        assert!(error.starts_with(&installed), "{error}");
         assert!(error.contains("TLPDB::from_file"));
+
+        // The Linux installer runs without osascript, so its stderr is the
+        // script's own.
+        let error = install_error(
+            "Installing the required LaTeX packages failed.\ntlmgr: connection refused\n",
+        );
+        assert!(error.starts_with(&installed), "{error}");
+        assert!(error.ends_with("tlmgr: connection refused"), "{error}");
     }
 
     #[test]

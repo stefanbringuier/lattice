@@ -10,13 +10,15 @@
  *
  *   assets DIRECTORY  the release's assets (`gh release download --dir`): each
  *                     must be one of the signed artifacts (the disk image, the
- *                     updater archive and its signature, latest.json), and
- *                     none may be a font.
+ *                     updater archive and its signature, latest.json, the
+ *                     AppImages with their signatures, their checksums and
+ *                     install.sh), and none may be a font.
  *   site DIRECTORY    a static build for the website (scripts/web-demo.mjs):
  *                     no file may be named for Timeless or be a byte copy of a
  *                     Timeless font. The open-licensed faces the app draws
  *                     with (Inter, KaTeX, …) may ship.
- *   app APP           the built .app, before it is packaged: no file may be
+ *   app APP           the built .app before it is packaged, or an AppImage
+ *                     unpacked with --appimage-extract: no file may be
  *                     named for Timeless or be a byte copy of a Timeless font
  *                     (those under LATTICE_PRIVATE_FONTS_DIR and the ones the
  *                     build emitted into dist/assets). Outside the bundled
@@ -35,12 +37,26 @@ import { closeSync, openSync, readFileSync, readSync, readdirSync, statSync } fr
 import path from "node:path";
 import { isMain, projectRoot, sha256, walkFiles } from "./lib/util.mjs";
 
-/** The files a release may publish: what tauri-action uploads plus the stapled image. */
-const RELEASE_ASSETS = [/\.dmg$/, /\.app\.tar\.gz$/, /\.app\.tar\.gz\.sig$/, /^latest\.json$/];
+/**
+ * The files a release may publish: what tauri-action uploads plus the stapled
+ * image, and the release-linux job's AppImages, signatures, checksums and
+ * installer.
+ */
+const RELEASE_ASSETS = [
+  /\.dmg$/, /\.app\.tar\.gz$/, /\.app\.tar\.gz\.sig$/, /^latest\.json$/,
+  /^Lattice-(?:x86_64|aarch64)\.AppImage(?:\.sig)?$/, /^SHA256SUMS$/, /^install\.sh$/,
+];
 const FONT_EXTENSION = /\.(?:woff2?|[ot]tf|ttc|eot|dfont|pfb|pfa)$/i;
 const FONT_SIGNATURES = new Set(["wOF2", "wOFF", "OTTO", "true", "typ1", "ttcf", "\0\x01\0\0"]);
-/** The bundled runtimes, relative to the .app, whose open-licensed fonts may ship. */
-const OPEN_RUNTIMES = ["Contents/Resources/presentation-runtime/", "Contents/Resources/synara-runtime/"];
+/**
+ * Each app layout, told apart by a file only it has, with its bundled runtimes
+ * (relative to the app) whose open-licensed fonts may ship. Tauri puts an
+ * AppImage's resources under usr/lib/<product name>.
+ */
+const APP_LAYOUTS = [
+  { marker: "Contents/MacOS", openRuntimes: ["Contents/Resources/presentation-runtime/", "Contents/Resources/synara-runtime/"] },
+  { marker: "AppRun", openRuntimes: ["usr/lib/Lattice/presentation-runtime/", "usr/lib/Lattice/synara-runtime/"] },
+];
 const EMITTED_TIMELESS = /^Timeless.*\.woff2$/;
 
 function signature(file) {
@@ -76,14 +92,17 @@ export function timelessFontHashes({ fontsDirectory, emittedDirectory }) {
 }
 
 /**
- * Findings for every file inside a built .app. Throws when `app` is not one:
- * walkFiles treats a missing root as empty, and an empty walk would otherwise
- * pass a mistyped release path as clean.
+ * Findings for every file inside a built .app or unpacked AppImage. Throws
+ * when `app` is neither: walkFiles treats a missing root as empty, and an
+ * empty walk would otherwise pass a mistyped release path as clean.
  */
 export function checkApp(app, timelessHashes) {
-  const macos = path.join(app, "Contents", "MacOS");
-  if (!statSync(app, { throwIfNoEntry: false })?.isDirectory() || !statSync(macos, { throwIfNoEntry: false })?.isDirectory()) {
-    throw new Error(`${app} is not a built .app (no Contents/MacOS directory)`);
+  // The folder first: inside a plain file, the marker lookups would throw ENOTDIR.
+  const layout = statSync(app, { throwIfNoEntry: false })?.isDirectory()
+    ? APP_LAYOUTS.find(({ marker }) => statSync(path.join(app, marker), { throwIfNoEntry: false }))
+    : undefined;
+  if (!layout) {
+    throw new Error(`${app} is not a built .app (no Contents/MacOS directory) or unpacked AppImage (no AppRun)`);
   }
   const findings = [];
   for (const file of walkFiles(app)) {
@@ -91,7 +110,7 @@ export function checkApp(app, timelessHashes) {
     const label = `${path.basename(app)}/${relative}`;
     if (/timeless/i.test(path.basename(file))) findings.push(`${label} is named for Timeless`);
     else if (timelessHashes.size > 0 && timelessHashes.has(sha256(readFileSync(file)))) findings.push(`${label} is a copy of a Timeless font`);
-    else if (!OPEN_RUNTIMES.some((runtime) => relative.startsWith(runtime)) && isFont(file)) {
+    else if (!layout.openRuntimes.some((runtime) => relative.startsWith(runtime)) && isFont(file)) {
       findings.push(`${label} is a font outside the app's web assets and bundled runtimes`);
     }
   }

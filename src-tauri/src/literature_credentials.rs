@@ -121,7 +121,17 @@ fn loaded_vault() -> Result<CredentialVault, String> {
     if let Some(vault) = cache.as_ref() {
         return Ok(vault.clone());
     }
-    let vault = read_vault(&entry()?)?;
+    let vault = match read_vault(&entry()?) {
+        Ok(vault) => vault,
+        // A Linux desktop may run no Secret Service. Literature lookups go on
+        // with environment and anonymous access. Left uncached, so a later save
+        // reads the real store first and cannot overwrite keys with this blank.
+        Err(error) if cfg!(target_os = "linux") => {
+            log::warn!(target: "lattice::credentials", "no saved keys available: {error}");
+            return Ok(CredentialVault::default());
+        }
+        Err(error) => return Err(error),
+    };
     *cache = Some(vault.clone());
     Ok(vault)
 }

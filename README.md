@@ -95,6 +95,16 @@ No TeX yet? Lattice notices at launch and offers to install BasicTeX for you.
 
 Official builds are signed, notarized by Apple, and update themselves.
 
+On Linux, Lattice runs on x86_64 and ARM64 with glibc 2.39 or later: Ubuntu 24.04 and later, Linux Mint 22, Debian 13, current Fedora, CentOS Stream 10, and Arch-based desktops such as Omarchy.
+Install it for your user, with no root, and it joins your app menu:
+
+```sh
+curl -fsSL https://github.com/leo1oel/lattice/releases/latest/download/install.sh | sh
+```
+
+Or download the `.AppImage` for your machine from the [latest release](https://github.com/leo1oel/lattice/releases/latest), make it executable and run it.
+Either way it updates itself, and Lattice offers to install TinyTeX into your home folder, where it stays across updates.
+
 ## Contributing
 
 To build from source, see [CONTRIBUTING.md](CONTRIBUTING.md) and the [architecture docs](docs/README.md).

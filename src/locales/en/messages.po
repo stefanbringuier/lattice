@@ -721,6 +721,22 @@ msgstr "{name} copy"
 msgid "{name} could not be saved. Close it and discard the unsaved changes?"
 msgstr "{name} could not be saved. Close it and discard the unsaved changes?"
 
+#: src/platform/host-errors-setup.ts
+msgid "{name} installation failed.\n"
+"{detail}"
+msgstr "{name} installation failed.\n"
+"{detail}"
+
+#: src/platform/host-errors-setup.ts
+msgid "{name} installation failed. Please try again."
+msgstr "{name} installation failed. Please try again."
+
+#: src/platform/host-errors-setup.ts
+msgid "{name} is installed, but Lattice could not finish installing the required LaTeX packages.\n"
+"{detail}"
+msgstr "{name} is installed, but Lattice could not finish installing the required LaTeX packages.\n"
+"{detail}"
+
 #: src/build/compile-explain.ts
 msgid "{name} is loaded twice with different options"
 msgstr "{name} is loaded twice with different options"
@@ -744,6 +760,18 @@ msgstr "{name} is too large to open in the editor"
 #: src/editor/markdown/engine/views/component-views.tsx
 msgid "{name} properties"
 msgstr "{name} properties"
+
+#: src/platform/host-errors-setup.ts
+msgid "{name} was installed, but Lattice could not look up required file {file}.\n"
+"{error}"
+msgstr "{name} was installed, but Lattice could not look up required file {file}.\n"
+"{error}"
+
+#: src/platform/host-errors-setup.ts
+msgid "{name} was installed, but required file {file} could not be found.\n"
+"{detail}"
+msgstr "{name} was installed, but required file {file} could not be found.\n"
+"{detail}"
 
 #: src/papers/paper-identity.ts
 msgid "{names} +{more}"
@@ -923,6 +951,14 @@ msgstr "{target} has not been changed."
 #: src/telemetry/app-updater.tsx
 msgid "{terminalCommands} terminal commands"
 msgstr "{terminalCommands} terminal commands"
+
+#: src/build/tex-setup-wizard.tsx
+msgid "{TEX_DISTRIBUTION} installation progress"
+msgstr "{TEX_DISTRIBUTION} installation progress"
+
+#: src/build/tex-setup-wizard.tsx
+msgid "{TEX_DISTRIBUTION} installed"
+msgstr "{TEX_DISTRIBUTION} installed"
 
 #: src/telemetry/app-notify.ts
 msgid "{title} — full text"
@@ -2218,6 +2254,10 @@ msgstr "automatic"
 msgid "Automatic"
 msgstr "Automatic"
 
+#: src/platform/host-errors-setup.ts
+msgid "Automatic {what} installation is not available for this processor ({arch})."
+msgstr "Automatic {what} installation is not available for this processor ({arch})."
+
 #: src/settings/settings-dialog.tsx
 #: src/settings/settings-search-index.ts
 msgid "Automatic build"
@@ -2232,10 +2272,6 @@ msgstr "Automatic checks LaTeX as academic writing and other files as everyday p
 #: src/settings/settings-search-index.ts
 msgid "Automatic updates"
 msgstr "Automatic updates"
-
-#: src/platform/host-errors-setup.ts
-msgid "Automatic uv installation is not available for this Mac architecture ({arch})."
-msgstr "Automatic uv installation is not available for this Mac architecture ({arch})."
 
 #: src/settings/settings-dialog.tsx
 #: src/settings/settings-search-index.ts
@@ -2287,42 +2323,6 @@ msgstr "Bars in the margin"
 #: src/editor/markdown/engine/chrome/slash-items.ts
 msgid "Basic blocks"
 msgstr "Basic blocks"
-
-#: src/platform/host-errors-setup.ts
-msgid "BasicTeX installation failed.\n"
-"{detail}"
-msgstr "BasicTeX installation failed.\n"
-"{detail}"
-
-#: src/platform/host-errors-setup.ts
-msgid "BasicTeX installation failed. Please try again."
-msgstr "BasicTeX installation failed. Please try again."
-
-#: src/build/tex-setup-wizard.tsx
-msgid "BasicTeX installation progress"
-msgstr "BasicTeX installation progress"
-
-#: src/build/tex-setup-wizard.tsx
-msgid "BasicTeX installed"
-msgstr "BasicTeX installed"
-
-#: src/platform/host-errors-setup.ts
-msgid "BasicTeX is installed, but Lattice could not finish installing the required LaTeX packages.\n"
-"{detail}"
-msgstr "BasicTeX is installed, but Lattice could not finish installing the required LaTeX packages.\n"
-"{detail}"
-
-#: src/platform/host-errors-setup.ts
-msgid "BasicTeX was installed, but Lattice could not look up required file {file}.\n"
-"{error}"
-msgstr "BasicTeX was installed, but Lattice could not look up required file {file}.\n"
-"{error}"
-
-#: src/platform/host-errors-setup.ts
-msgid "BasicTeX was installed, but required file {file} could not be found.\n"
-"{detail}"
-msgstr "BasicTeX was installed, but required file {file} could not be found.\n"
-"{detail}"
 
 #: src/papers/audit-messages.ts
 msgid "Batch result reused"
@@ -4207,6 +4207,10 @@ msgid "Could not locate {path} on Overleaf to sync its move. No files were delet
 msgstr "Could not locate {path} on Overleaf to sync its move. No files were deleted."
 
 #: src/platform/host-errors-setup.ts
+msgid "Could not locate your home folder."
+msgstr "Could not locate your home folder."
+
+#: src/platform/host-errors-setup.ts
 msgid "Could not locate your macOS Application Support folder."
 msgstr "Could not locate your macOS Application Support folder."
 
@@ -5087,8 +5091,8 @@ msgid "Downloading {0}…"
 msgstr "Downloading {0}…"
 
 #: src/build/tex-install-dialog.tsx
-msgid "Downloading BasicTeX…"
-msgstr "Downloading BasicTeX…"
+msgid "Downloading {TEX_DISTRIBUTION}…"
+msgstr "Downloading {TEX_DISTRIBUTION}…"
 
 #: src/papers/paper-import-progress.ts
 msgid "Downloading full text and figures…"
@@ -7099,17 +7103,17 @@ msgstr "Inspect and replace"
 msgid "Install"
 msgstr "Install"
 
+#: src/build/tex-setup-wizard.tsx
+msgid "Install {TEX_DISTRIBUTION}"
+msgstr "Install {TEX_DISTRIBUTION}"
+
+#: src/build/tex-setup-wizard.tsx
+msgid "Install {TEX_DISTRIBUTION} ({TEX_INSTALL_SIZE_HINT})"
+msgstr "Install {TEX_DISTRIBUTION} ({TEX_INSTALL_SIZE_HINT})"
+
 #: src/settings/settings-dialog.tsx
 msgid "Install automatically"
 msgstr "Install automatically"
-
-#: src/build/tex-setup-wizard.tsx
-msgid "Install Basic TeX ({TEX_INSTALL_SIZE_HINT})"
-msgstr "Install Basic TeX ({TEX_INSTALL_SIZE_HINT})"
-
-#: src/build/tex-setup-wizard.tsx
-msgid "Install BasicTeX"
-msgstr "Install BasicTeX"
 
 #: src/build/tex-setup-wizard.tsx
 msgid "Install later"
@@ -7147,8 +7151,8 @@ msgid "Install required tools"
 msgstr "Install required tools"
 
 #: src/build/tex-install-dialog.tsx
-msgid "Installing BasicTeX…"
-msgstr "Installing BasicTeX…"
+msgid "Installing {TEX_DISTRIBUTION}…"
+msgstr "Installing {TEX_DISTRIBUTION}…"
 
 #: src/build/tex-install-dialog.tsx
 msgid "Installing LaTeX packages…"
@@ -9297,8 +9301,8 @@ msgid "No suggestions in this file"
 msgstr "No suggestions in this file"
 
 #: src/platform/host-errors-setup.ts
-msgid "No supported LaTeX engine could be run as your macOS user."
-msgstr "No supported LaTeX engine could be run as your macOS user."
+msgid "No supported LaTeX engine could be run as your {system} user."
+msgstr "No supported LaTeX engine could be run as your {system} user."
 
 #: src/editor/latex/symbol-palette.ts
 msgid "No symbol matches “{query}”."
@@ -13888,6 +13892,10 @@ msgstr "TeX Live's package manager is not installed."
 msgid "TeX Live’s package manager needs an update, and the update did not finish."
 msgstr "TeX Live’s package manager needs an update, and the update did not finish."
 
+#: src/platform/host-errors-setup.ts
+msgid "TeX Live's tools need Perl. Install perl with your distribution's package manager, then try again."
+msgstr "TeX Live's tools need Perl. Install perl with your distribution's package manager, then try again."
+
 #. placeholder {0}: diagnostic.message
 #: src/build/compile-diagnostics-panel.tsx
 msgid "TeX: {0}"
@@ -14759,6 +14767,10 @@ msgstr "The text is too large to save as a copy."
 msgid "The third-party notices could not be read from the app bundle."
 msgstr "The third-party notices could not be read from the app bundle."
 
+#: src/platform/host-errors-setup.ts
+msgid "The TinyTeX archive did not contain the expected TeX Live folder."
+msgstr "The TinyTeX archive did not contain the expected TeX Live folder."
+
 #: src/platform/host-errors-workspace.ts
 msgid "The transaction contains no edits."
 msgstr "The transaction contains no edits."
@@ -15032,8 +15044,8 @@ msgid "This is the earliest version"
 msgstr "This is the earliest version"
 
 #: src/platform/host-errors-setup.ts
-msgid "This Lattice version includes BasicTeX {year}. Update Lattice to install the current BasicTeX release."
-msgstr "This Lattice version includes BasicTeX {year}. Update Lattice to install the current BasicTeX release."
+msgid "This Lattice version includes {name} {year}. Update Lattice to install the current release."
+msgstr "This Lattice version includes {name} {year}. Update Lattice to install the current release."
 
 #: src/platform/host-errors-workspace.ts
 msgid "This Lattice window is already opening in your browser."

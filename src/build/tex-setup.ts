@@ -10,6 +10,14 @@ export type DoctorReportLike = { ok: boolean; summary: string; checks: DoctorChe
 // eslint-disable-next-line lingui/no-unlocalized-strings -- a size with a unit, the same in every locale
 export const TEX_INSTALL_SIZE_HINT = "1 GB";
 
+/**
+ * The TeX distribution the one-click install sets up: TinyTeX on Linux, whose
+ * WebKitGTK says "Linux" in its user agent, and BasicTeX on macOS
+ * (`TEX_DISTRIBUTION` in src-tauri/src/tex_setup/installer.rs).
+ */
+// eslint-disable-next-line lingui/no-unlocalized-strings -- product names, the same in every locale
+export const TEX_DISTRIBUTION = /\bLinux\b/.test(navigator.userAgent) ? "TinyTeX" : "BasicTeX";
+
 export type TexInstallProgress = {
   stage: "downloading" | "authorizing" | "installing-base" | "installing-packages" | "installing-tools" | "verifying" | "complete";
   progress: number;

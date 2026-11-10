@@ -22,6 +22,8 @@ import "./pdfjs-runtime";
 const PDF_RANGE_CHUNK_BYTES = 2 ** 20;
 /** PDF.js's `AnnotationEditorType.DISABLE`. */
 const ANNOTATION_EDITOR_DISABLED = -1;
+/** The Linux app's WebKitGTK says "Linux" in its user agent (as tex-setup.ts reads it). */
+const LINUX_WEB_VIEW = /\bLinux\b/.test(navigator.userAgent);
 
 export type ViewerRecord = {
   key: string;
@@ -113,9 +115,12 @@ export function viewerOptions(
       disableStream: onDemand,
       // WKWebView can accept an embedded Type 1 font through FontFace but then
       // paint none of its glyphs. Drawing glyph outlines bypasses that path and
-      // still leaves PDF.js's selectable text layer available. Chromium's font
-      // path is correct and much cheaper, so keep it enabled there.
-      disableFontFace: !browserHosted,
+      // still leaves PDF.js's selectable text layer available. Chromium's and
+      // WebKitGTK's font paths are correct and much cheaper, so keep them
+      // enabled there. Outlines are also drawn unhinted, which a Retina screen
+      // hides and the 1x screens common on Linux do not: small text came out
+      // soft and uneven at 100%.
+      disableFontFace: !browserHosted && !LINUX_WEB_VIEW,
       useSystemFonts: false,
     },
   };

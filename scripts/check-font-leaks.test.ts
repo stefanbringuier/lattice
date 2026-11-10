@@ -30,11 +30,17 @@ describe("release asset check", () => {
     write(root, "Lattice.app.tar.gz", "archive");
     write(root, "Lattice.app.tar.gz.sig", "signature");
     write(root, "latest.json", "{\"timeless\": true}");
+    write(root, "Lattice-x86_64.AppImage", "\x7fELF image");
+    write(root, "Lattice-aarch64.AppImage.sig", "signature");
+    write(root, "SHA256SUMS", "checksums");
+    write(root, "install.sh", "#!/bin/sh");
+    write(root, "Lattice_0.1.0_amd64.AppImage", "\x7fELF unfinished image");
     write(root, "notes.txt", "release notes");
     write(root, "Sans.woff2", "not even a font inside");
     write(root, "renamed.bin", font("\0\x01\0\0", "glyphs"));
     write(root, "renamed.dmg", font("OTTO", "glyphs"));
     expect(checkAssets(root).sort()).toEqual([
+      "Lattice_0.1.0_amd64.AppImage is not a signed release artifact",
       "Sans.woff2 is a font offered for download on its own",
       "Sans.woff2 is not a signed release artifact",
       "notes.txt is not a signed release artifact",
@@ -72,6 +78,24 @@ describe("built app check", () => {
       "Lattice.app/Contents/Resources/renamed.dat is a copy of a Timeless font",
       "Lattice.app/Contents/Resources/synara-runtime/vendor/copied.woff2 is a copy of a Timeless font",
       "Lattice.app/Contents/Resources/unnamed.bin is a font outside the app's web assets and bundled runtimes",
+    ]);
+  });
+
+  it("checks an unpacked AppImage the same way, with its runtimes where Tauri puts them", () => {
+    const root = scratchDirectory();
+    const emitted = font("wOF2", "the serif face");
+    write(root, "dist/assets/TimelessSerif-TextRegular-abc123.woff2", emitted);
+    const hashes = timelessFontHashes({ fontsDirectory: null, emittedDirectory: path.join(root, "dist/assets") });
+
+    const appdir = path.join(root, "squashfs-root");
+    write(appdir, "AppRun", "#!/bin/sh");
+    write(appdir, "usr/lib/Lattice/synara-runtime/fonts/KaTeX_Main-Regular.woff2", font("wOF2", "katex"));
+    write(appdir, "usr/lib/Lattice/presentation-runtime/fonts/Inter.ttf", font("true", "inter"));
+    write(appdir, "usr/lib/Lattice/synara-runtime/vendor/copied.woff2", emitted);
+    write(appdir, "usr/share/fonts/Inter.woff2", font("wOF2", "inter"));
+    expect(checkApp(appdir, hashes).sort()).toEqual([
+      "squashfs-root/usr/lib/Lattice/synara-runtime/vendor/copied.woff2 is a copy of a Timeless font",
+      "squashfs-root/usr/share/fonts/Inter.woff2 is a font outside the app's web assets and bundled runtimes",
     ]);
   });
 

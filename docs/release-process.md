@@ -6,12 +6,11 @@ How a Lattice release is actually cut today. Everything below is derived from
 change one of those, change this document with it.
 
 Releases target **Apple Silicon macOS** (`--target aarch64-apple-darwin`,
-`minimumSystemVersion: 14.0`) and a **Linux AppImage** built on
-`ubuntu-24.04` (glibc floor for recent Ubuntu, Fedora, and Arch/Omarchy-class
-hosts). The shipping artifact is not built on 26.04 — that would only raise
-the floor. The macOS job stays the notarized `.dmg` path; the Linux job
-uploads the AppImage and a matrix smoke checks it on Ubuntu 24.04/26.04,
-Fedora, and Arch before the release is undrafted.
+`minimumSystemVersion: 14.0`) and **Linux on x86_64 and ARM64**, as one
+AppImage per architecture built on `ubuntu-24.04`, which sets the glibc floor
+at 2.39. The AppImages are not built on a newer Ubuntu — that would only raise
+the floor. Debian 12, Mint 21, CentOS Stream 9 and RHEL 9 are below it and are
+not supported.
 
 ## Cut a release
 
@@ -79,8 +78,10 @@ without a lead keeps showing the last one that had one.
 
 ## What `release.yml` does
 
-One job on `macos-latest` (Apple Silicon), with `contents: write` so it can
-create the Release and upload assets.
+The steps below are the `release` job on `macos-latest` (Apple Silicon), with
+`contents: write` so it can create the Release and upload assets. The Linux
+jobs run beside it ([below](#the-linux-jobs)), and `publish-release` waits for
+both.
 
 1. **Checkout** with `fetch-depth: 0` — the release notes need the full tag
    history.
@@ -89,7 +90,7 @@ create the Release and upload assets.
    range as `- <subject> (<short hash>)`, and skips the `Release v…` commit
    itself. Falls back to "Maintenance release." when the range is empty. Puts
    `.github/release-notes/<tag>.md` above that list when the file exists. Appends
-   the Apple Silicon install blurb and a `**Full Changelog**` compare link, then
+   the macOS and Linux install blurbs and a `**Full Changelog**` compare link, then
    passes the whole thing to the build step through a heredoc-delimited
    `$GITHUB_OUTPUT`.
 3. **Toolchains.** pnpm 10, Node 22, Bun 1.4.4, stable Rust with the `aarch64-apple-darwin` target.
@@ -130,13 +131,44 @@ create the Release and upload assets.
     execute`, `xcrun stapler validate`.
 15. **Upload the stapled DMG** with `gh release upload --clobber` (the stapled
     ticket is added after tauri-action's own upload, so the asset is replaced).
-16. **Check the release assets for font files.** Downloads the draft's assets
-    and runs `node scripts/check-font-leaks.mjs assets <dir>`: only the signed
-    artifacts and `latest.json`, none of them a font.
+16. **Check the release assets for font files** (`publish-release`). Downloads
+    the draft's assets and runs `node scripts/check-font-leaks.mjs assets <dir>`:
+    only the signed artifacts, `latest.json`, the AppImages, their checksums
+    and `install.sh`, none of them a font.
 17. **Publish** with `gh release edit "$GITHUB_REF_NAME" --draft=false`.
 
 If any verification step fails, the Release simply stays a draft and nothing
 reaches users.
+
+### The Linux jobs
+
+1. **`build-linux`**, once on `ubuntu-24.04` and once on `ubuntu-24.04-arm`,
+   builds the AppImage with `pnpm tauri build --bundles appimage`, fetching
+   Synara and the licensed fonts as the macOS job does.
+   `scripts/appimage/media-plugins.sh` picks the GStreamer plugins it carries,
+   and `scripts/appimage/finish.sh` then turns Tauri's image into the shipped
+   one: the host's graphics stack instead of bundled copies, the AppRun hook
+   (`scripts/appimage/apprun-hook.sh`), and a runtime that starts without FUSE.
+   The job checks the unpacked image for loose font files, signs it for the
+   updater (`tauri signer sign`; Tauri's own signature would be for the image
+   before `finish.sh`, so `tauri.linux.conf.json` turns it off), and keeps it as
+   a workflow artifact, `Lattice-<arch>.AppImage`.
+2. **`appimage-smoke`** launches each image through its `AppRun` in distro
+   containers of its architecture (`.github/scripts/smoke-appimage.sh`): Ubuntu
+   24.04 and 26.04, Debian 13, Linux Mint 22, current Fedora, CentOS Stream 10
+   and Arch, on X11 or Wayland. Omarchy publishes no container image, so Arch
+   stands in for it, with one guest on Wayland. Containers cannot cover GPU
+   drivers, real compositors, keyrings or FUSE.
+3. **`appimage-install`** runs `scripts/appimage/install.sh` as a user would
+   on Ubuntu, Fedora and Arch (`.github/scripts/test-install.sh`), then
+   uninstalls.
+4. **`release-linux`** waits for the macOS job's draft, uploads the AppImages,
+   their signatures, `SHA256SUMS` and `install.sh` to it, and adds a
+   `linux-x86_64` and a `linux-aarch64` entry to `latest.json`.
+
+To build and check an AppImage on your own machine, run the same scripts in an
+Ubuntu 24.04 container; `finish.sh` and `media-plugins.sh` say in their
+headers what they need.
 
 ### `web-demo.yml`
 
@@ -180,6 +212,11 @@ None of the Apple secrets are available to a fork, and the updater private key
 is not in the repository. A fork that pushes a `v*` tag will fail at the
 certificate-import step (`security find-identity` finds no
 `Developer ID Application` identity and the `test -n` assertion fails).
+
+The Linux jobs need no Apple secret, so a fork's tag still builds, checks and
+uploads its AppImages; `release-linux` creates the draft itself when the macOS
+job made none. Without `TAURI_SIGNING_PRIVATE_KEY` the AppImages are unsigned
+and stay out of `latest.json`, and the release stays a draft.
 
 What a fork can do instead:
 

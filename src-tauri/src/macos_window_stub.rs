@@ -1,31 +1,19 @@
-//! Linux / non-macOS stand-ins for the AppKit window helpers.
-//!
-//! Keeps the same IPC surface so the frontend compiles; vibrancy, quarantine,
-//! and AppKit monitors are no-ops until Linux window chrome is implemented.
+//! The stand-ins for `macos_window.rs` off macOS: the same functions and
+//! commands, so its callers and the page stay as they are. Window materials,
+//! the colour sampler, the quarantine flag and AppKit's event monitors have no
+//! counterpart here, and do nothing.
 
-use std::collections::HashMap;
-use std::sync::{LazyLock, Mutex, PoisonError};
+use std::sync::{Mutex, PoisonError};
 
-static PDF_COPY_TEXT: LazyLock<Mutex<HashMap<String, String>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
 static FOCUSED_WINDOW_LABEL: Mutex<Option<String>> = Mutex::new(None);
-
-const LIGHT_WINDOW_BACKGROUND: (f64, f64, f64) = (247.0, 247.0, 246.0);
 
 pub fn install_magnify_monitor(_app: tauri::AppHandle) {}
 
+/// Only the AppKit copy-shortcut monitor reads this text, and Linux has none.
 #[tauri::command]
-pub fn set_pdf_copy_text(window: tauri::WebviewWindow, text: Option<String>) {
-    let mut selections = PDF_COPY_TEXT.lock().unwrap_or_else(PoisonError::into_inner);
-    if let Some(text) = text.filter(|text| !text.is_empty()) {
-        selections.insert(window.label().to_string(), text);
-    } else {
-        selections.remove(window.label());
-    }
-}
+pub fn set_pdf_copy_text(_window: tauri::WebviewWindow, _text: Option<String>) {}
 
 pub fn clear_pdf_copy_text(window_label: &str) {
-    PDF_COPY_TEXT.lock().unwrap_or_else(PoisonError::into_inner).remove(window_label);
     set_window_focused(window_label, false);
 }
 
@@ -44,42 +32,22 @@ pub fn set_window_focused(window_label: &str, is_focused: bool) {
 
 pub fn install_copy_shortcut_monitor(_app: tauri::AppHandle) {}
 
-pub(crate) fn ns_window_address(_window: &tauri::WebviewWindow) -> Option<usize> {
-    None
-}
-
-#[derive(Clone, Copy, serde::Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum WindowAppearance {
-    Light,
-    Dark,
-}
-
+/// The page's theme (appearance, background, translucency). The window keeps
+/// the background it was built with, so the payload is accepted and ignored.
 #[derive(serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct WindowMaterial {
-    pub appearance: Option<WindowAppearance>,
-    pub background: String,
-    pub translucent: bool,
-}
+pub struct WindowMaterial {}
 
 impl WindowMaterial {
     pub fn at_launch() -> Self {
-        let (red, green, blue) = LIGHT_WINDOW_BACKGROUND;
-        Self {
-            appearance: None,
-            background: rgb_hex(red / 255.0, green / 255.0, blue / 255.0),
-            translucent: false,
-        }
+        Self {}
     }
 }
 
+/// What the window's backing became: always opaque, as there is no vibrancy.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum WindowBacking {
-    Translucent,
     Opaque,
-    ReducedTransparency,
 }
 
 pub fn apply_window_material(
@@ -108,18 +76,3 @@ pub async fn choose_files_and_folders(
 }
 
 pub fn clear_launch_quarantine() {}
-
-fn rgb_hex(red: f64, green: f64, blue: f64) -> String {
-    let channel = |value: f64| ((value.clamp(0.0, 1.0) * 255.0).round() as u8);
-    format!("#{:02X}{:02X}{:02X}", channel(red), channel(green), channel(blue))
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn launch_material_is_opaque_on_linux() {
-        let material = super::WindowMaterial::at_launch();
-        assert!(!material.translucent);
-        assert_eq!(material.background, "#F7F7F6");
-    }
-}

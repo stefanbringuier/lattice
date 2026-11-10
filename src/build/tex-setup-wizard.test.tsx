@@ -6,9 +6,12 @@ import {
   isRequiredSetupMissing,
   missingPaperToolNames,
   missingTexToolNames,
+  TEX_DISTRIBUTION,
   type DoctorReportLike,
 } from "./tex-setup";
 import { TexSetupWizard } from "./tex-setup-wizard";
+
+const INSTALL_TEX = `Install ${TEX_DISTRIBUTION} (1 GB)`;
 
 type Channel = { onmessage: ((message: unknown) => void) | null };
 const tauri = vi.hoisted(() => ({ invoke: vi.fn(), channel: null as Channel | null }));
@@ -102,13 +105,13 @@ describe("tex setup wizard helpers", () => {
     }));
     const { onClose, onRecheck } = renderWizard(report(check("latexmk", false)), vi.fn(async () => report(...READY)));
 
-    fireEvent.click(screen.getByRole("button", { name: "Install Basic TeX (1 GB)" }));
+    fireEvent.click(screen.getByRole("button", { name: INSTALL_TEX }));
     expect(tauri.invoke).toHaveBeenCalledWith("start_tex_install", { mode: "full", onProgress: expect.anything() });
     expect(document.querySelector(".tex-setup-install-loader")).not.toBeNull();
     expect(onClose).not.toHaveBeenCalled();
 
     act(() => tauri.channel?.onmessage?.({ stage: "downloading", progress: 0.37 }));
-    expect(screen.getByRole("progressbar", { name: "BasicTeX installation progress" }))
+    expect(screen.getByRole("progressbar", { name: `${TEX_DISTRIBUTION} installation progress` }))
       .toHaveAttribute("aria-valuenow", "37");
     expect(document.querySelector(".tex-setup-progress-fill")).toHaveStyle({ width: "37%" });
 
@@ -127,10 +130,10 @@ describe("tex setup wizard helpers", () => {
       check("conference-fonts", false, "Missing uhvr8a.pfb — Permission denied"),
     )));
 
-    fireEvent.click(screen.getByRole("button", { name: "Install Basic TeX (1 GB)" }));
+    fireEvent.click(screen.getByRole("button", { name: INSTALL_TEX }));
 
     expect(await screen.findByText(/Missing tools: latexmk/)).toBeInTheDocument();
     expect(screen.getByText(/Missing uhvr8a\.pfb — Permission denied/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Install Basic TeX (1 GB)" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: INSTALL_TEX })).toBeEnabled();
   });
 });

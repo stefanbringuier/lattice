@@ -10,7 +10,8 @@
 //!
 //! macOS enforces no `RLIMIT_AS`, so the ceiling is a poll: the group's
 //! physical footprint (what Activity Monitor shows as Memory, swapped and
-//! compressed pages included), summed over every process in it.
+//! compressed pages included), summed over every process in it. Linux polls
+//! the same way but reads resident memory, so swapped pages do not count.
 
 use crate::commands;
 use std::fs;
@@ -228,9 +229,9 @@ fn kill(child: &mut Child) {
 
 /// The physical footprint of every process in `group`, in bytes.
 fn group_footprint(group: u32) -> u64 {
+    let Ok(group) = i32::try_from(group) else { return 0 };
     #[cfg(target_os = "macos")]
     {
-        let Ok(group) = i32::try_from(group) else { return 0 };
         let mut pids = [0 as libc::pid_t; 256];
         let size = i32::try_from(std::mem::size_of_val(&pids)).unwrap_or(i32::MAX);
         // SAFETY: the buffer is `size` bytes long and outlives the call.
@@ -246,34 +247,15 @@ fn group_footprint(group: u32) -> u64 {
     }
     #[cfg(target_os = "linux")]
     {
-        // Approximate: sum RSS of processes whose PGID matches.
-        let Ok(entries) = std::fs::read_dir("/proc") else { return 0 };
+        let Ok(entries) = fs::read_dir("/proc") else { return 0 };
         entries
             .flatten()
-            .filter_map(|entry| entry.file_name().to_str()?.parse::<i32>().ok())
-            .filter(|&pid| process_group(pid) == Some(group as i32))
+            .filter_map(|entry| entry.file_name().to_str()?.parse::<libc::pid_t>().ok())
+            // SAFETY: getpgid takes a plain pid and answers -1 for one that is gone.
+            .filter(|&pid| unsafe { libc::getpgid(pid) } == group)
             .map(footprint)
             .sum()
     }
-    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
-    {
-        let _ = group;
-        0
-    }
-}
-
-#[cfg(target_os = "linux")]
-fn process_group(pid: i32) -> Option<i32> {
-    let status = std::fs::read_to_string(format!("/proc/{pid}/status")).ok()?;
-    for line in status.lines() {
-        if let Some(rest) = line.strip_prefix("NSpgid:\t").or_else(|| line.strip_prefix("NSpgid:")) {
-            return rest.trim().parse().ok();
-        }
-        if let Some(rest) = line.strip_prefix("PGrp:\t").or_else(|| line.strip_prefix("PGrp:")) {
-            return rest.trim().parse().ok();
-        }
-    }
-    None
 }
 
 fn footprint(pid: libc::pid_t) -> u64 {
@@ -293,14 +275,10 @@ fn footprint(pid: libc::pid_t) -> u64 {
     #[cfg(target_os = "linux")]
     {
         // /proc/<pid>/statm field 1 is resident pages.
-        let Ok(statm) = std::fs::read_to_string(format!("/proc/{pid}/statm")) else { return 0 };
-        let pages: u64 = statm.split_whitespace().nth(1).and_then(|value| value.parse().ok()).unwrap_or(0);
+        let Ok(statm) = fs::read_to_string(format!("/proc/{pid}/statm")) else { return 0 };
+        let pages: u64 =
+            statm.split_whitespace().nth(1).and_then(|value| value.parse().ok()).unwrap_or(0);
         pages.saturating_mul(page_size())
-    }
-    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
-    {
-        let _ = pid;
-        0
     }
 }
 

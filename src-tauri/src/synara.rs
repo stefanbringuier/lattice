@@ -40,6 +40,7 @@ const UNAVAILABLE: &str = "The built-in agent service is unavailable.";
 /// Under the agent home: the sidecar's stdout and stderr, which startup
 /// failures quote from and the support bundle collects.
 const SIDECAR_LOG_DIR: &str = "lattice-logs";
+#[cfg(target_os = "macos")]
 pub(crate) const BIBLIOGRAPHY_SANDBOX_PROFILE: &str = concat!(
     "(version 1)\n",
     "(allow default)\n",
@@ -241,13 +242,11 @@ impl SynaraRuntime {
         // bibliography mutations.
         let executable = std::env::current_exe()
             .map_err(|error| format!("Could not locate the app executable: {error}"))?;
-        let inspector = crate::process_inspector::install_launcher(&self.home_dir, &executable)?;
-        crate::process_inspector::verify_launcher(&inspector)?;
-        // On macOS the sidecar runs under Seatbelt so .bib writes are denied in
-        // process. Linux has no Seatbelt; start Node directly and keep the
-        // process-inspector launcher on PATH for Synara's `ps` calls.
         #[cfg(target_os = "macos")]
         let mut command = {
+            let inspector =
+                crate::process_inspector::install_launcher(&self.home_dir, &executable)?;
+            crate::process_inspector::verify_launcher(&inspector)?;
             let mut command = Command::new("/usr/bin/sandbox-exec");
             command
                 .arg("-p")
@@ -259,12 +258,10 @@ impl SynaraRuntime {
                 .env("SYNARA_PROCESS_PS_PATH", &inspector);
             command
         };
+        // Linux has no Seatbelt, so .bib writes are not denied here, and Synara
+        // can use the system `ps` that the sandbox only blocks on macOS.
         #[cfg(not(target_os = "macos"))]
-        let mut command = {
-            let mut command = Command::new(&self.node.executable);
-            command.env("SYNARA_PROCESS_PS_PATH", &inspector);
-            command
-        };
+        let mut command = Command::new(&self.node.executable);
         self.node.configure(&mut command);
         command.arg(&self.server_entry);
         // Web storage is scoped to the complete iframe origin, including its

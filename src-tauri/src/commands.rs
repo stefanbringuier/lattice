@@ -13,6 +13,7 @@ use std::ffi::OsString;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
+use std::sync::OnceLock;
 
 mod python_tools;
 
@@ -39,9 +40,22 @@ pub(crate) fn with_child_path(mut command: Command) -> Command {
 }
 
 /// Start the child as the leader of a new process group, so everything it
-/// launches can be signalled together with `signal_process_group`.
+/// launches can be signalled together with `signal_process_group`. The group
+/// leads a session of its own, away from the terminal Lattice may have been
+/// started from: an interactive shell (`bash -ilc`, the login environment the
+/// agent reads) in a background group of that terminal stops itself with
+/// SIGTTIN until it is brought to the foreground, which never happens.
 pub(crate) fn in_new_process_group(command: &mut Command) -> &mut Command {
-    std::os::unix::process::CommandExt::process_group(command, 0);
+    // SAFETY: setsid is async-signal-safe, as calls between fork and exec
+    // must be. A new session also starts a new group, which the child leads.
+    unsafe {
+        std::os::unix::process::CommandExt::pre_exec(command, || {
+            if libc::setsid() < 0 {
+                return Err(std::io::Error::last_os_error());
+            }
+            Ok(())
+        });
+    }
     command
 }
 
@@ -81,13 +95,23 @@ pub fn managed_tools_dir() -> Option<PathBuf> {
         .map(|directory| directory.join("bin").join(format!("uv-{MANAGED_UV_VERSION}")))
 }
 
-/// This build's own folder under Application Support.
+/// This build's own data folder: under Application Support on macOS, and
+/// under the XDG data folder (~/.local/share) elsewhere.
 pub(crate) fn app_support_dir() -> Option<PathBuf> {
-    env::var_os("HOME").map(|home| {
-        PathBuf::from(home)
-            .join("Library/Application Support")
-            .join(crate::app_identity::identifier())
-    })
+    #[cfg(target_os = "macos")]
+    let base =
+        env::var_os("HOME").map(|home| PathBuf::from(home).join("Library/Application Support"));
+    #[cfg(not(target_os = "macos"))]
+    let base = env::var_os("XDG_DATA_HOME")
+        .map(PathBuf::from)
+        .filter(|path| path.is_absolute())
+        .or_else(|| env::var_os("HOME").map(|home| PathBuf::from(home).join(".local/share")));
+    base.map(|base| base.join(crate::app_identity::identifier()))
+}
+
+/// Where TinyTeX installs itself on Linux, and Lattice installs it there.
+pub(crate) fn tinytex_root() -> Option<PathBuf> {
+    env::var_os("HOME").map(|home| PathBuf::from(home).join(".TinyTeX"))
 }
 
 /// The managed `uv` or `uvx`, once it runs and reports the pinned version.
@@ -152,17 +176,30 @@ fn child_path() -> OsString {
         .unwrap_or_else(|_| env::var_os("PATH").unwrap_or_else(|| OsString::from("/usr/bin:/bin")))
 }
 
+/// Where Tauri bundled this build's resources: Contents/Resources in the macOS
+/// app, usr/lib/<product name> in the AppImage.
+static RESOURCE_DIR: OnceLock<PathBuf> = OnceLock::new();
+
+/// Record the resource folder from the generated Tauri context; `run` calls
+/// this before any tool can run, including in the binary's command-line modes.
+pub(crate) fn init_resource_dir(package_info: &tauri::PackageInfo) {
+    if let Ok(directory) =
+        tauri::utils::platform::resource_dir(package_info, &tauri::Env::default())
+    {
+        let _ = RESOURCE_DIR.set(directory);
+    }
+}
+
 /// Executable launchers shipped with Lattice's JavaScript runtime.
 ///
 /// `bibcite` finds its formatter through PATH. During development that launcher
-/// uses the adjacent standalone Node; the packaged macOS app resolves the same
-/// directory under Resources, beside the same standalone Node.
+/// uses the adjacent standalone Node; the packaged app resolves the same
+/// directory among its resources, beside the same standalone Node.
 fn bundled_tools_dir() -> Option<PathBuf> {
     if tauri::is_dev() {
         return Some(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("synara-runtime/bin"));
     }
-    let contents = env::current_exe().ok()?.parent()?.parent()?.to_path_buf();
-    Some(contents.join("Resources/synara-runtime/bin"))
+    Some(RESOURCE_DIR.get()?.join("synara-runtime/bin"))
 }
 
 fn command_directories() -> Vec<PathBuf> {
@@ -174,14 +211,11 @@ fn command_directories() -> Vec<PathBuf> {
     // Known TeX locations next: a GUI launch's PATH rarely includes
     // /Library/TeX/texbin, even after MacTeX/BasicTeX install. Rediscovered on
     // every call so Recheck works without quitting after a fresh install.
-    directories.push(PathBuf::from("/Library/TeX/texbin"));
-    directories.extend(discover_texlive_bins(Path::new("/usr/local/texlive")));
-    directories.extend(discover_texlive_bins(Path::new("/opt/homebrew/texlive")));
+    directories.extend(tex_directories());
     directories
         .extend(["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin"].map(PathBuf::from));
     if let Some(home) = env::var_os("HOME").map(PathBuf::from) {
         directories.extend([home.join(".local/bin"), home.join(".cargo/bin")]);
-        directories.extend(discover_texlive_bins(&home.join("Library/TinyTeX")));
     }
     if let Some(path) = env::var_os("PATH") {
         directories.extend(env::split_paths(&path));
@@ -194,15 +228,30 @@ fn command_directories() -> Vec<PathBuf> {
 }
 
 /// Where TeX installs its programs, among the directories above: what a
-/// terminal's shell adds to its search path (terminal/pty.rs).
+/// terminal's shell adds to its search path (terminal/pty.rs). The TeX
+/// Lattice installs comes first: BasicTeX's /Library/TeX/texbin on macOS, and
+/// ~/.TinyTeX on Linux, ahead of a distribution's TeX in /usr/bin, which can
+/// lack what Lattice needs, so every tool comes from the one tree.
 pub(crate) fn tex_directories() -> Vec<PathBuf> {
     let mut directories = vec![PathBuf::from("/Library/TeX/texbin")];
+    directories.extend(tinytex_root().map(|root| tinytex_bins(&root)).unwrap_or_default());
     directories.extend(discover_texlive_bins(Path::new("/usr/local/texlive")));
     directories.extend(discover_texlive_bins(Path::new("/opt/homebrew/texlive")));
     if let Some(home) = env::var_os("HOME").map(PathBuf::from) {
-        directories.extend(discover_texlive_bins(&home.join("Library/TinyTeX")));
+        directories.extend(tinytex_bins(&home.join("Library/TinyTeX")));
     }
     directories
+}
+
+/// `<root>/bin/<platform>`, where a TinyTeX tree keeps its programs.
+fn tinytex_bins(root: &Path) -> Vec<PathBuf> {
+    fs::read_dir(root.join("bin"))
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|platform| platform.path())
+        .filter(|path| path.is_dir())
+        .collect()
 }
 
 /// `<root>/<year>/bin/<arch>` directories, newest tree first (year names sort

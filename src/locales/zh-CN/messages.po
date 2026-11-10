@@ -721,6 +721,22 @@ msgstr "{name} 副本"
 msgid "{name} could not be saved. Close it and discard the unsaved changes?"
 msgstr "{name} 没保存成功，仍要关闭并丢弃修改？"
 
+#: src/platform/host-errors-setup.ts
+msgid "{name} installation failed.\n"
+"{detail}"
+msgstr "{name} 安装失败。\n"
+"{detail}"
+
+#: src/platform/host-errors-setup.ts
+msgid "{name} installation failed. Please try again."
+msgstr "{name} 安装失败，请重试"
+
+#: src/platform/host-errors-setup.ts
+msgid "{name} is installed, but Lattice could not finish installing the required LaTeX packages.\n"
+"{detail}"
+msgstr "{name} 已安装，但 Lattice 没能装完所需的 LaTeX 宏包。\n"
+"{detail}"
+
 #: src/build/compile-explain.ts
 msgid "{name} is loaded twice with different options"
 msgstr "{name} 以不同选项加载了两次"
@@ -744,6 +760,18 @@ msgstr "{name} 太大，无法在编辑器中打开"
 #: src/editor/markdown/engine/views/component-views.tsx
 msgid "{name} properties"
 msgstr "{name}设置"
+
+#: src/platform/host-errors-setup.ts
+msgid "{name} was installed, but Lattice could not look up required file {file}.\n"
+"{error}"
+msgstr "{name} 已安装，但 Lattice 无法查找所需文件 {file}。\n"
+"{error}"
+
+#: src/platform/host-errors-setup.ts
+msgid "{name} was installed, but required file {file} could not be found.\n"
+"{detail}"
+msgstr "{name} 已安装，但找不到所需文件 {file}。\n"
+"{detail}"
 
 #: src/papers/paper-identity.ts
 msgid "{names} +{more}"
@@ -923,6 +951,14 @@ msgstr "{target} 未作任何改动。"
 #: src/telemetry/app-updater.tsx
 msgid "{terminalCommands} terminal commands"
 msgstr "{terminalCommands} 个终端命令"
+
+#: src/build/tex-setup-wizard.tsx
+msgid "{TEX_DISTRIBUTION} installation progress"
+msgstr "{TEX_DISTRIBUTION} 安装进度"
+
+#: src/build/tex-setup-wizard.tsx
+msgid "{TEX_DISTRIBUTION} installed"
+msgstr "{TEX_DISTRIBUTION} 已安装"
 
 #: src/telemetry/app-notify.ts
 msgid "{title} — full text"
@@ -2218,6 +2254,10 @@ msgstr "自动"
 msgid "Automatic"
 msgstr "自动"
 
+#: src/platform/host-errors-setup.ts
+msgid "Automatic {what} installation is not available for this processor ({arch})."
+msgstr "此处理器（{arch}）不支持自动安装 {what}"
+
 #: src/settings/settings-dialog.tsx
 #: src/settings/settings-search-index.ts
 msgid "Automatic build"
@@ -2232,10 +2272,6 @@ msgstr "“自动”会把 LaTeX 按学术写作检查，其他文件按日常�
 #: src/settings/settings-search-index.ts
 msgid "Automatic updates"
 msgstr "自动更新"
-
-#: src/platform/host-errors-setup.ts
-msgid "Automatic uv installation is not available for this Mac architecture ({arch})."
-msgstr "这台 Mac 的架构（{arch}）不支持自动安装 uv"
 
 #: src/settings/settings-dialog.tsx
 #: src/settings/settings-search-index.ts
@@ -2287,42 +2323,6 @@ msgstr "页边竖线"
 #: src/editor/markdown/engine/chrome/slash-items.ts
 msgid "Basic blocks"
 msgstr "基础"
-
-#: src/platform/host-errors-setup.ts
-msgid "BasicTeX installation failed.\n"
-"{detail}"
-msgstr "BasicTeX 安装失败。\n"
-"{detail}"
-
-#: src/platform/host-errors-setup.ts
-msgid "BasicTeX installation failed. Please try again."
-msgstr "BasicTeX 安装失败，请重试"
-
-#: src/build/tex-setup-wizard.tsx
-msgid "BasicTeX installation progress"
-msgstr "BasicTeX 安装进度"
-
-#: src/build/tex-setup-wizard.tsx
-msgid "BasicTeX installed"
-msgstr "BasicTeX 已安装"
-
-#: src/platform/host-errors-setup.ts
-msgid "BasicTeX is installed, but Lattice could not finish installing the required LaTeX packages.\n"
-"{detail}"
-msgstr "BasicTeX 已安装，但 Lattice 没能装完必需的 LaTeX 组件。\n"
-"{detail}"
-
-#: src/platform/host-errors-setup.ts
-msgid "BasicTeX was installed, but Lattice could not look up required file {file}.\n"
-"{error}"
-msgstr "BasicTeX 已安装，但 Lattice 无法查找必需的文件 {file}。\n"
-"{error}"
-
-#: src/platform/host-errors-setup.ts
-msgid "BasicTeX was installed, but required file {file} could not be found.\n"
-"{detail}"
-msgstr "BasicTeX 已安装，但找不到必需的文件 {file}。\n"
-"{detail}"
 
 #: src/papers/audit-messages.ts
 msgid "Batch result reused"
@@ -4207,6 +4207,10 @@ msgid "Could not locate {path} on Overleaf to sync its move. No files were delet
 msgstr "在 Overleaf 上找不到 {path}，无法同步它的移动。没有删除任何文件"
 
 #: src/platform/host-errors-setup.ts
+msgid "Could not locate your home folder."
+msgstr "找不到你的主文件夹"
+
+#: src/platform/host-errors-setup.ts
 msgid "Could not locate your macOS Application Support folder."
 msgstr "找不到 macOS 的“Application Support”文件夹"
 
@@ -5087,8 +5091,8 @@ msgid "Downloading {0}…"
 msgstr "正在下载 {0}…"
 
 #: src/build/tex-install-dialog.tsx
-msgid "Downloading BasicTeX…"
-msgstr "正在下载 LaTeX…"
+msgid "Downloading {TEX_DISTRIBUTION}…"
+msgstr "正在下载 {TEX_DISTRIBUTION}…"
 
 #: src/papers/paper-import-progress.ts
 msgid "Downloading full text and figures…"
@@ -7099,17 +7103,17 @@ msgstr "检查与替换"
 msgid "Install"
 msgstr "安装"
 
+#: src/build/tex-setup-wizard.tsx
+msgid "Install {TEX_DISTRIBUTION}"
+msgstr "安装 {TEX_DISTRIBUTION}"
+
+#: src/build/tex-setup-wizard.tsx
+msgid "Install {TEX_DISTRIBUTION} ({TEX_INSTALL_SIZE_HINT})"
+msgstr "安装 {TEX_DISTRIBUTION}（{TEX_INSTALL_SIZE_HINT}）"
+
 #: src/settings/settings-dialog.tsx
 msgid "Install automatically"
 msgstr "自动安装"
-
-#: src/build/tex-setup-wizard.tsx
-msgid "Install Basic TeX ({TEX_INSTALL_SIZE_HINT})"
-msgstr "安装 LaTeX（{TEX_INSTALL_SIZE_HINT}）"
-
-#: src/build/tex-setup-wizard.tsx
-msgid "Install BasicTeX"
-msgstr "安装 LaTeX"
 
 #: src/build/tex-setup-wizard.tsx
 msgid "Install later"
@@ -7147,8 +7151,8 @@ msgid "Install required tools"
 msgstr "安装所需工具"
 
 #: src/build/tex-install-dialog.tsx
-msgid "Installing BasicTeX…"
-msgstr "正在安装 LaTeX…"
+msgid "Installing {TEX_DISTRIBUTION}…"
+msgstr "正在安装 {TEX_DISTRIBUTION}…"
 
 #: src/build/tex-install-dialog.tsx
 msgid "Installing LaTeX packages…"
@@ -9297,8 +9301,8 @@ msgid "No suggestions in this file"
 msgstr "这个文件没有修订建议"
 
 #: src/platform/host-errors-setup.ts
-msgid "No supported LaTeX engine could be run as your macOS user."
-msgstr "以你的 macOS 用户身份无法运行任何受支持的 LaTeX 引擎"
+msgid "No supported LaTeX engine could be run as your {system} user."
+msgstr "无法以你的 {system} 用户身份运行任何受支持的 LaTeX 引擎"
 
 #: src/editor/latex/symbol-palette.ts
 msgid "No symbol matches “{query}”."
@@ -13888,6 +13892,10 @@ msgstr "未安装 TeX Live 的组件管理器（tlmgr）"
 msgid "TeX Live’s package manager needs an update, and the update did not finish."
 msgstr "TeX Live 组件管理器需要更新，但更新未能完成。"
 
+#: src/platform/host-errors-setup.ts
+msgid "TeX Live's tools need Perl. Install perl with your distribution's package manager, then try again."
+msgstr "TeX Live 的工具需要 Perl。请用发行版的包管理器安装 perl，然后重试"
+
 #. placeholder {0}: diagnostic.message
 #: src/build/compile-diagnostics-panel.tsx
 msgid "TeX: {0}"
@@ -14759,6 +14767,10 @@ msgstr "文本太大，无法另存为副本"
 msgid "The third-party notices could not be read from the app bundle."
 msgstr "无法从应用包中读取第三方声明。"
 
+#: src/platform/host-errors-setup.ts
+msgid "The TinyTeX archive did not contain the expected TeX Live folder."
+msgstr "TinyTeX 压缩包里没有预期的 TeX Live 文件夹"
+
 #: src/platform/host-errors-workspace.ts
 msgid "The transaction contains no edits."
 msgstr "这次修改没有任何内容"
@@ -15032,8 +15044,8 @@ msgid "This is the earliest version"
 msgstr "这是最早的版本"
 
 #: src/platform/host-errors-setup.ts
-msgid "This Lattice version includes BasicTeX {year}. Update Lattice to install the current BasicTeX release."
-msgstr "此版本的 Lattice 内置的是 BasicTeX {year}。请先更新 Lattice，再安装最新版 BasicTeX"
+msgid "This Lattice version includes {name} {year}. Update Lattice to install the current release."
+msgstr "此版本的 Lattice 附带 {name} {year}。请更新 Lattice 以安装当前版本"
 
 #: src/platform/host-errors-workspace.ts
 msgid "This Lattice window is already opening in your browser."

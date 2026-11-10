@@ -19,35 +19,40 @@ function bundledPart(what: string): string {
 }
 
 export const SETUP_HOST_ERRORS: readonly HostErrorEntry[] = [
-  // A missing package (tex_setup/installer.rs, tex_setup/macos.rs). The
+  // A missing package (tex_setup/installer.rs, tex_setup/common.rs). The
   // first line is the summary the install sheet shows; what follows it is
   // tlmgr's or kpsewhich's own output, kept as written.
   ["tex_setup/installer.rs", "No TeX Live package provides {missing_file}. It may be a custom project or conference-template file; sync or copy it from Overleaf into the project folder.", ([file]) => t`No TeX Live package provides ${file}. It may be a custom project or conference-template file; sync or copy it from Overleaf into the project folder.`],
   ["tex_setup/installer.rs", "More than one TeX Live package provides {missing_file}: {}. Nothing was installed automatically.", ([file, packages]) => t`More than one TeX Live package provides ${file}: ${packages}. Nothing was installed automatically.`],
-  ["tex_setup/macos.rs", "Invalid missing TeX dependency name.", () => t`Invalid missing TeX dependency name.`],
-  ["tex_setup/macos.rs", "TeX Live's package manager is not installed.", () => t`TeX Live's package manager is not installed.`],
-  ["tex_setup/macos.rs", "The TeX Live repository could not be searched.\n{}", ([detail]) => t`The TeX Live repository could not be searched.\n${detail}`],
-  ["tex_setup/macos.rs", "Could not search the TeX Live repository: {error}", ([error]) => t`Could not search the TeX Live repository: ${error}`],
-  ["tex_setup/macos.rs", "The package installation finished, but {missing_file} is still unavailable.\n{}", ([file, detail]) => t`The package installation finished, but ${file} is still unavailable.\n${detail}`],
-  ["tex_setup/macos.rs", "Could not verify {missing_file}: {error}", ([file, error]) => t`Could not verify ${file}: ${error}`],
-  ["tex_setup/macos.rs", "Required setup is already running in another Lattice window.", () => t`Required setup is already running in another Lattice window.`],
+  ["tex_setup/common.rs", "Invalid missing TeX dependency name.", () => t`Invalid missing TeX dependency name.`],
+  ["tex_setup/common.rs", "TeX Live's package manager is not installed.", () => t`TeX Live's package manager is not installed.`],
+  ["tex_setup/common.rs", "The TeX Live repository could not be searched.\n{}", ([detail]) => t`The TeX Live repository could not be searched.\n${detail}`],
+  ["tex_setup/common.rs", "Could not search the TeX Live repository: {error}", ([error]) => t`Could not search the TeX Live repository: ${error}`],
+  ["tex_setup/common.rs", "The package installation finished, but {missing_file} is still unavailable.\n{}", ([file, detail]) => t`The package installation finished, but ${file} is still unavailable.\n${detail}`],
+  ["tex_setup/common.rs", "Could not verify {missing_file}: {error}", ([file, error]) => t`Could not verify ${file}: ${error}`],
+  ["tex_setup/common.rs", "Required setup is already running in another Lattice window.", () => t`Required setup is already running in another Lattice window.`],
 
-  // Installing BasicTeX and the paper tools (tex_setup/macos.rs, tex_setup/installer.rs)
-  ["tex_setup/macos.rs", "This Lattice version includes BasicTeX {BASIC_TEX_YEAR}. Update Lattice to install the current BasicTeX release.", ([year]) => t`This Lattice version includes BasicTeX ${year}. Update Lattice to install the current BasicTeX release.`],
-  ["tex_setup/installer.rs", "BasicTeX installation failed. Please try again.", () => t`BasicTeX installation failed. Please try again.`],
-  ["tex_setup/installer.rs", "BasicTeX installation failed.\n{detail}", ([detail]) => t`BasicTeX installation failed.\n${detail}`],
-  ["tex_setup/installer.rs", "BasicTeX is installed, but Lattice could not finish installing the required LaTeX packages.\n{detail}", ([detail]) => t`BasicTeX is installed, but Lattice could not finish installing the required LaTeX packages.\n${detail}`],
-  ["tex_setup/macos.rs", "BasicTeX was installed, but required file {required_file} could not be found.\n{}", ([file, detail]) => t`BasicTeX was installed, but required file ${file} could not be found.\n${detail}`],
-  ["tex_setup/macos.rs", "BasicTeX was installed, but Lattice could not look up required file {required_file}.\n{error}", ([file, error]) => t`BasicTeX was installed, but Lattice could not look up required file ${file}.\n${error}`],
-  ["tex_setup/macos.rs", "No supported LaTeX engine could be run as your macOS user.", () => t`No supported LaTeX engine could be run as your macOS user.`],
-  ["tex_setup/macos.rs", "Lattice's managed {tool} failed user-level verification.\n{error}", ([tool, error]) => t`Lattice's managed ${tool} failed user-level verification.\n${error}`],
-  ["tex_setup/macos.rs", "Could not download {}: {error}", ([what, error]) => t`Could not download ${what}: ${error}`],
-  ["tex_setup/macos.rs", "The {name} download was interrupted: {error}", ([what, error]) => t`The ${what} download was interrupted: ${error}`],
-  ["tex_setup/macos.rs", "The downloaded {} failed its security check.", ([what]) => t`The downloaded ${what} failed its security check.`],
+  // Installing TeX (BasicTeX on macOS, TinyTeX on Linux) and the paper tools
+  // (tex_setup/common.rs, tex_setup/installer.rs, tex_setup/fetch.rs and each
+  // platform's own file). `name` is the distribution, `system` the OS.
+  ["tex_setup/common.rs", "This Lattice version includes {TEX_DISTRIBUTION} {year}. Update Lattice to install the current release.", ([name, year]) => t`This Lattice version includes ${name} ${year}. Update Lattice to install the current release.`],
+  ["tex_setup/installer.rs", "{TEX_DISTRIBUTION} installation failed. Please try again.", ([name]) => t`${name} installation failed. Please try again.`],
+  ["tex_setup/installer.rs", "{TEX_DISTRIBUTION} installation failed.\n{detail}", ([name, detail]) => t`${name} installation failed.\n${detail}`],
+  ["tex_setup/installer.rs", "{TEX_DISTRIBUTION} is installed, but Lattice could not finish installing the required LaTeX packages.\n{detail}", ([name, detail]) => t`${name} is installed, but Lattice could not finish installing the required LaTeX packages.\n${detail}`],
+  ["tex_setup/common.rs", "{TEX_DISTRIBUTION} was installed, but required file {required_file} could not be found.\n{}", ([name, file, detail]) => t`${name} was installed, but required file ${file} could not be found.\n${detail}`],
+  ["tex_setup/common.rs", "{TEX_DISTRIBUTION} was installed, but Lattice could not look up required file {required_file}.\n{error}", ([name, file, error]) => t`${name} was installed, but Lattice could not look up required file ${file}.\n${error}`],
+  ["tex_setup/common.rs", "No supported LaTeX engine could be run as your {SYSTEM} user.", ([system]) => t`No supported LaTeX engine could be run as your ${system} user.`],
+  ["tex_setup/common.rs", "Lattice's managed {tool} failed user-level verification.\n{error}", ([tool, error]) => t`Lattice's managed ${tool} failed user-level verification.\n${error}`],
+  ["tex_setup/fetch.rs", "Could not download {}: {error}", ([what, error]) => t`Could not download ${what}: ${error}`],
+  ["tex_setup/fetch.rs", "The {name} download was interrupted: {error}", ([what, error]) => t`The ${what} download was interrupted: ${error}`],
+  ["tex_setup/fetch.rs", "The downloaded {} failed its security check.", ([what]) => t`The downloaded ${what} failed its security check.`],
   ["tex_setup/macos.rs", "Could not request permission to install {name}: {error}", ([what, error]) => t`Could not request permission to install ${what}: ${error}`],
-  ["tex_setup/macos.rs", "Could not locate your macOS Application Support folder.", () => t`Could not locate your macOS Application Support folder.`],
-  ["tex_setup/macos.rs", "Automatic uv installation is not available for this Mac architecture ({}).", ([arch]) => t`Automatic uv installation is not available for this Mac architecture (${arch}).`],
-  ["tex_setup/macos.rs", "Refusing to install uv into an invalid managed tools folder: {}", ([path]) => t`Refusing to install uv into an invalid managed tools folder: ${path}`],
+  ["tex_setup/linux.rs", "TeX Live's tools need Perl. Install perl with your distribution's package manager, then try again.", () => t`TeX Live's tools need Perl. Install perl with your distribution's package manager, then try again.`],
+  ["tex_setup/linux.rs", "Could not locate your home folder.", () => t`Could not locate your home folder.`],
+  ["tex_setup/linux.rs", "The TinyTeX archive did not contain the expected TeX Live folder.", () => t`The TinyTeX archive did not contain the expected TeX Live folder.`],
+  ["tex_setup/common.rs", "Could not locate your macOS Application Support folder.", () => t`Could not locate your macOS Application Support folder.`],
+  ["tex_setup/common.rs", "Automatic {what} installation is not available for this processor ({}).", ([what, arch]) => t`Automatic ${what} installation is not available for this processor (${arch}).`],
+  ["tex_setup/common.rs", "Refusing to install uv into an invalid managed tools folder: {}", ([path]) => t`Refusing to install uv into an invalid managed tools folder: ${path}`],
   ["tex_setup/installer.rs", "The uv archive contained an invalid root entry.", () => t`The uv archive contained an invalid root entry.`],
   ["tex_setup/installer.rs", "The uv archive contained an unexpected entry: {}", ([entry]) => t`The uv archive contained an unexpected entry: ${entry}`],
   ["tex_setup/installer.rs", "The uv archive contained an invalid {name} entry.", ([name]) => t`The uv archive contained an invalid ${name} entry.`],

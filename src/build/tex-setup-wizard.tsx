@@ -6,6 +6,7 @@ import {
   missingTexToolNames,
   missingPaperToolNames,
   isRequiredSetupMissing,
+  TEX_DISTRIBUTION,
   TEX_INSTALL_SIZE_HINT,
   type DoctorReportLike,
   type TexInstallProgress,
@@ -54,13 +55,13 @@ export function TexSetupWizard(props: {
     setInstalling(true);
     setInstallError(null);
     setInstallProgress({ stage: paperToolsOnly ? "installing-tools" : "downloading", progress: 0 });
-    const trace = logAction(TEX_SETUP_SOURCE, paperToolsOnly ? t`Install required paper tools` : t`Install BasicTeX`);
+    const trace = logAction(TEX_SETUP_SOURCE, paperToolsOnly ? t`Install required paper tools` : t`Install ${TEX_DISTRIBUTION}`);
     try {
       const onProgress = new Channel<TexInstallProgress>();
       onProgress.onmessage = (progress) => setInstallProgress(progress);
       await invoke("start_tex_install", { mode: paperToolsOnly ? "toolsOnly" : "full", onProgress });
       setInstallProgress({ stage: "complete", progress: 1 });
-      const installedProduct = paperToolsOnly ? t`The required tools` : "BasicTeX";
+      const installedProduct = paperToolsOnly ? t`The required tools` : TEX_DISTRIBUTION;
       const report = await props.onRecheck();
       if (!report) {
         throw new Error(t({
@@ -79,7 +80,7 @@ export function TexSetupWizard(props: {
         }));
       }
       trace.ok(
-        paperToolsOnly ? t`Required paper tools installed` : t`BasicTeX installed`,
+        paperToolsOnly ? t`Required paper tools installed` : t`${TEX_DISTRIBUTION} installed`,
         paperToolsOnly && props.paperToolsNeeded ? { detail: t`Try that again now` } : undefined,
       );
       props.onClose();
@@ -100,7 +101,7 @@ export function TexSetupWizard(props: {
     >
       {installing && <InfinityLoader className="tex-setup-install-loader" size={16} />}
       {/* The download's size is the one fact the dialog adds to its title. */}
-      {paperToolsOnly ? t`Install paper tools` : t`Install Basic TeX (${TEX_INSTALL_SIZE_HINT})`}
+      {paperToolsOnly ? t`Install paper tools` : t`Install ${TEX_DISTRIBUTION} (${TEX_INSTALL_SIZE_HINT})`}
     </MotionButton>
   );
 
@@ -116,7 +117,7 @@ export function TexSetupWizard(props: {
       closeDisabled={!paperToolsOnly || installing}
       onClose={props.onClose}
       progress={installing ? {
-        label: paperToolsOnly ? t`Required tools installation progress` : t`BasicTeX installation progress`,
+        label: paperToolsOnly ? t`Required tools installation progress` : t`${TEX_DISTRIBUTION} installation progress`,
         percent: Math.round(installProgress.progress * 100),
         stage: installProgress.stage,
       } : null}

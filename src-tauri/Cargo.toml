@@ -93,9 +93,9 @@ tokio-tungstenite = { version = "0.29.0", default-features = false, features = [
 futures-util = { version = "0.3.33", default-features = false, features = ["std", "sink"] }
 tokio = { version = "1", features = ["sync", "net", "time"] }
 axum = { version = "0.8", features = ["ws"] }
-# apple-native on macOS; linux-native uses libsecret without an async runtime
-# feature fight (linux-native-async-persistent needs secret-service rt-*).
-keyring = { version = "3", default-features = false, features = ["apple-native", "linux-native"] }
+# apple-native on macOS. On Linux, the desktop's Secret Service (GNOME Keyring,
+# KWallet): the kernel keyring behind linux-native loses saved keys on reboot.
+keyring = { version = "3", default-features = false, features = ["apple-native", "sync-secret-service", "crypto-rust"] }
 rustix = { version = "1", features = ["fs"] }
 # 0.2.4 aborts the whole conversion when even one page is classified as
 # needing OCR (including arXiv 2605.30170); keep the tested 0.1 line until the
@@ -164,6 +164,11 @@ objc2-web-kit = { version = "0.3", default-features = false, features = [
   "WKWebViewConfiguration",
 ] }
 block2 = "0.6"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+# TinyTeX ships as .tar.xz (tex_setup/linux.rs), unpacked in-process so the
+# system needs no xz. Already in the tree; no features of its own.
+liblzma = { version = "0.4", default-features = false }
 
 [dev-dependencies]
 # The mock runtime, to drive the terminal commands through real IPC requests.

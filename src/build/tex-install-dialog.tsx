@@ -3,7 +3,7 @@ import { useLingui } from "@lingui/react/macro";
 import { ChevronRight } from "lucide-react";
 import { InlineMessage } from "../components/ui/inline-message";
 import { ModalDialog } from "../components/ui/modal-dialog";
-import type { TexDependencyInstallProgress, TexInstallProgress } from "./tex-setup";
+import { TEX_DISTRIBUTION, type TexDependencyInstallProgress, type TexInstallProgress } from "./tex-setup";
 
 type TexInstallStage = TexInstallProgress["stage"] | TexDependencyInstallProgress["stage"];
 
@@ -11,9 +11,10 @@ type TexInstallStage = TexInstallProgress["stage"] | TexDependencyInstallProgres
 function useStageCopy(): Record<TexInstallStage, readonly [stage: string, detail: string]> {
   const { t } = useLingui();
   return {
-    downloading: [t`Downloading BasicTeX…`, ""],
+    downloading: [t`Downloading ${TEX_DISTRIBUTION}…`, ""],
+    // Only macOS asks: Linux installs TeX into the home folder.
     authorizing: [t`Waiting for administrator approval…`, t`Approve the macOS prompt to continue`],
-    "installing-base": [t`Installing BasicTeX…`, ""],
+    "installing-base": [t`Installing ${TEX_DISTRIBUTION}…`, ""],
     "installing-packages": [t`Installing LaTeX packages…`, t`Can take up to 15 minutes`],
     "installing-tools": [t`Installing required tools…`, ""],
     verifying: [t`Verifying installation…`, ""],
