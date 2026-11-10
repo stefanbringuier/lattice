@@ -19,7 +19,7 @@ mod appimage;
 mod python_tools;
 
 #[cfg(target_os = "linux")]
-pub(crate) use appimage::host_environment;
+pub(crate) use appimage::{host_environment, outside_appimage};
 #[cfg(all(test, unix))]
 pub(crate) use python_tools::UvTool;
 pub use python_tools::{
@@ -247,19 +247,16 @@ pub(crate) fn child_path() -> OsString {
         .unwrap_or_else(|_| env::var_os("PATH").unwrap_or_else(|| OsString::from("/usr/bin:/bin")))
 }
 
-/// The folders of the `PATH` Lattice was started with, less its AppImage's own.
-pub(crate) fn inherited_path() -> Option<Vec<PathBuf>> {
-    let path = env::var_os("PATH")?;
-    #[cfg(target_os = "linux")]
-    return Some(appimage::outside_appimage(env::split_paths(&path)));
-    #[cfg(not(target_os = "linux"))]
-    Some(env::split_paths(&path).collect())
-}
-
 /// Only a Linux AppImage has an environment of its own to keep from children.
 #[cfg(not(target_os = "linux"))]
 pub(crate) fn host_environment(command: &mut Command) -> &mut Command {
     command
+}
+
+/// Off Linux, no folder is an AppImage's.
+#[cfg(not(target_os = "linux"))]
+pub(crate) fn outside_appimage(directories: Vec<PathBuf>) -> Vec<PathBuf> {
+    directories
 }
 
 /// Executable launchers shipped with Lattice's JavaScript runtime.
@@ -314,9 +311,13 @@ fn command_directories() -> Vec<PathBuf> {
             }
         }
     }
-    directories.extend(inherited_path().unwrap_or_default());
+    if let Some(path) = env::var_os("PATH") {
+        directories.extend(env::split_paths(&path));
+    }
     directories.extend(macos_path_helper_directories());
 
+    // No folder inside Lattice's AppImage, from AppRun's PATH or its own layout (`appimage`).
+    let mut directories = outside_appimage(directories);
     let mut seen = HashSet::new();
     directories.retain(|directory| seen.insert(directory.clone()));
     directories

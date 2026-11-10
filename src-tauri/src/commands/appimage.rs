@@ -10,9 +10,11 @@
 //! the bundled libsystemd, and with `env` every `#!/usr/bin/env` script,
 //! `latexmk` from TeX Live or TinyTeX among them. Nothing under `$APPDIR` is
 //! meant for another program, and the mount is gone once Lattice quits, so a
-//! child gets each such variable without those entries, or unset when nothing
-//! else is left. A value that names no folder there (the hook's
-//! `GDK_BACKEND=x11`) cannot be told from the writer's own, and is kept.
+//! child gets none of it: each inherited variable without those entries, or
+//! unset when nothing else is left, and a search path without those folders
+//! (on Linux the bundled-tools folder of the macOS layout is one, and does not
+//! exist). A value that names no folder there (the hook's `GDK_BACKEND=x11`)
+//! cannot be told from the writer's own, and is kept.
 
 use std::env;
 use std::ffi::{OsStr, OsString};
@@ -40,12 +42,12 @@ pub(crate) fn host_environment(command: &mut Command) -> &mut Command {
     command
 }
 
-/// `entries` without the folders of Lattice's AppImage.
-pub(crate) fn outside_appimage(entries: impl Iterator<Item = PathBuf>) -> Vec<PathBuf> {
-    let appdir = appimage_dir();
-    entries
-        .filter(|entry| appdir.as_ref().is_none_or(|appdir| !entry.starts_with(appdir)))
-        .collect()
+/// `directories` without the folders of Lattice's AppImage.
+pub(crate) fn outside_appimage(mut directories: Vec<PathBuf>) -> Vec<PathBuf> {
+    if let Some(appdir) = appimage_dir() {
+        directories.retain(|directory| !directory.starts_with(&appdir));
+    }
+    directories
 }
 
 fn apply(
@@ -181,6 +183,6 @@ mod tests {
         let mut command = Command::new("latexmk");
         assert_eq!(host_environment(&mut command).get_envs().count(), 0);
         let path = [PathBuf::from("/tmp/.mount_LatticAbC123/usr/bin"), PathBuf::from("/usr/bin")];
-        assert_eq!(outside_appimage(path.clone().into_iter()), path);
+        assert_eq!(outside_appimage(path.to_vec()), path);
     }
 }

@@ -49,14 +49,15 @@ pub(crate) fn login_shell() -> PathBuf {
 /// locations a GUI launch rarely has, so `latexmk` is found even before the
 /// login profile runs (macOS's `path_helper` keeps what it was given).
 fn starting_path() -> OsString {
-    let mut directories: Vec<PathBuf> = crate::commands::inherited_path()
+    let mut directories: Vec<PathBuf> = std::env::var_os("PATH")
+        .map(|path| std::env::split_paths(&path).collect())
         .unwrap_or_else(|| ["/usr/bin", "/bin", "/usr/sbin", "/sbin"].map(PathBuf::from).to_vec());
     for directory in crate::commands::tex_directories() {
         if directory.is_dir() && !directories.contains(&directory) {
             directories.push(directory);
         }
     }
-    std::env::join_paths(directories).unwrap_or_default()
+    std::env::join_paths(crate::commands::outside_appimage(directories)).unwrap_or_default()
 }
 
 fn set_cloexec(fd: RawFd) -> io::Result<()> {
