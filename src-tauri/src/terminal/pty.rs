@@ -49,8 +49,7 @@ pub(crate) fn login_shell() -> PathBuf {
 /// locations a GUI launch rarely has, so `latexmk` is found even before the
 /// login profile runs (macOS's `path_helper` keeps what it was given).
 fn starting_path() -> OsString {
-    let mut directories: Vec<PathBuf> = std::env::var_os("PATH")
-        .map(|path| std::env::split_paths(&path).collect())
+    let mut directories: Vec<PathBuf> = crate::commands::inherited_path()
         .unwrap_or_else(|| ["/usr/bin", "/bin", "/usr/sbin", "/sbin"].map(PathBuf::from).to_vec());
     for directory in crate::commands::tex_directories() {
         if directory.is_dir() && !directories.contains(&directory) {
@@ -130,6 +129,7 @@ pub(super) fn spawn_shell(shell: &Path, cwd: &Path, cols: u16, rows: u16) -> io:
         .env("TERM_PROGRAM_VERSION", env!("CARGO_PKG_VERSION"))
         // Lattice's own variables describe Lattice's process, not the shell's.
         .env_remove("LATTICE_PROJECT");
+    crate::commands::host_environment(&mut command);
     // A Finder launch has no locale; without one zsh and vim treat CJK text
     // as single bytes. LC_CTYPE alone leaves messages in the writer's language.
     if ["LC_ALL", "LC_CTYPE", "LANG"].iter().all(|name| std::env::var_os(name).is_none()) {
