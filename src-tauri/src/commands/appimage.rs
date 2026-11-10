@@ -11,10 +11,11 @@
 //! `latexmk` from TeX Live or TinyTeX among them. Nothing under `$APPDIR` is
 //! meant for another program, and the mount is gone once Lattice quits, so a
 //! child gets none of it: each inherited variable without those entries, or
-//! unset when nothing else is left, and a search path without those folders
-//! (on Linux the bundled-tools folder of the macOS layout is one, and does not
-//! exist). A value that names no folder there (the hook's `GDK_BACKEND=x11`)
-//! cannot be told from the writer's own, and is kept.
+//! unset when nothing else is left, a search path without those folders (on
+//! Linux the bundled-tools folder of the macOS layout is one, and does not
+//! exist), and, when its caller names no working folder, not AppRun's
+//! `$APPDIR/usr` either. A value that names no folder there (the hook's
+//! `GDK_BACKEND=x11`) cannot be told from the writer's own, and is kept.
 
 use std::env;
 use std::ffi::{OsStr, OsString};
@@ -34,12 +35,37 @@ fn appimage_dir() -> Option<PathBuf> {
 }
 
 /// Give `command` every inherited variable that names a folder in Lattice's
-/// AppImage without it. Variables `command` already sets are left as set.
+/// AppImage without it, and a working folder outside it. Variables `command`
+/// already sets are left as set, and a working folder set later wins.
 pub(crate) fn host_environment(command: &mut Command) -> &mut Command {
     if let Some(appdir) = appimage_dir() {
         apply(command, &appdir, env::vars_os());
+        if command.get_current_dir().is_none() {
+            let current = env::current_dir().unwrap_or_default();
+            let opened_from = env::var_os("OWD").map(PathBuf::from);
+            let home = env::var_os("HOME").map(PathBuf::from);
+            if let Some(folder) = working_folder(&appdir, &current, [opened_from, home]) {
+                command.current_dir(folder);
+            }
+        }
     }
     command
+}
+
+/// Where a child starts instead of Lattice's `current` folder, when that is in
+/// the AppImage (AppRun starts Lattice in `$APPDIR/usr`): the first of
+/// `candidates`, where the AppImage was opened from (the runtime's `OWD`) and
+/// then the home folder, that is a folder outside it.
+fn working_folder(
+    appdir: &Path, current: &Path, candidates: [Option<PathBuf>; 2],
+) -> Option<PathBuf> {
+    if !current.starts_with(appdir) {
+        return None;
+    }
+    candidates
+        .into_iter()
+        .flatten()
+        .find(|folder| folder.is_absolute() && !folder.starts_with(appdir) && folder.is_dir())
 }
 
 /// `directories` without the folders of Lattice's AppImage.
@@ -177,11 +203,33 @@ mod tests {
     }
 
     #[test]
+    fn starts_a_child_where_the_appimage_was_opened_not_in_it() {
+        let appdir = Path::new(APPDIR);
+        let usr = appdir.join("usr");
+        let (opened_from, home) = (env::temp_dir(), env::temp_dir().join("no-such-home"));
+        let pick = |candidates| working_folder(appdir, &usr, candidates);
+        assert_eq!(
+            pick([Some(opened_from.clone()), Some(home.clone())]),
+            Some(opened_from.clone())
+        );
+        // Neither a folder in the AppImage nor one that is gone.
+        assert_eq!(
+            pick([Some(appdir.join("usr/bin")), Some(opened_from.clone())]),
+            Some(opened_from.clone())
+        );
+        assert_eq!(pick([Some(home), Some(opened_from.clone())]), Some(opened_from.clone()));
+        assert_eq!(pick([None, None]), None);
+        // Lattice already outside the AppImage: the child keeps Lattice's folder.
+        assert_eq!(working_folder(appdir, &opened_from, [Some(env::temp_dir()), None]), None);
+    }
+
+    #[test]
     fn changes_nothing_outside_an_appimage() {
         // Tests do not run from an AppImage: no APPDIR names their folder.
         assert_eq!(appimage_dir(), None);
         let mut command = Command::new("latexmk");
-        assert_eq!(host_environment(&mut command).get_envs().count(), 0);
+        host_environment(&mut command);
+        assert_eq!((command.get_envs().count(), command.get_current_dir()), (0, None));
         let path = [PathBuf::from("/tmp/.mount_LatticAbC123/usr/bin"), PathBuf::from("/usr/bin")];
         assert_eq!(outside_appimage(path.to_vec()), path);
     }
